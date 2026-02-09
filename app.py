@@ -48,11 +48,9 @@ with col_config:
                 
                 detalles_inf = {}
                 if tipo_inf == "Cajonera":
-                    # Dinamismo: El usuario decide cuánto espacio ocupan los cajones
                     altura_cajonera = st.slider(f"Altura del Módulo (mm)", 300, 1200, 720, key=f"h_caj_{i}")
                     cant_cajones = st.slider(f"Cant. Cajones", 2, 8, 3, key=f"qty_caj_{i}")
                     
-                    # Cálculo previo para mostrar info
                     alto_frente = (altura_cajonera / cant_cajones)
                     st.caption(f"Frentes de aprox {alto_frente:.0f}mm")
                     
@@ -163,7 +161,7 @@ if st.button("🚀 CALCULAR DESPIECE Y HERRAJES", type="primary"):
     compras = []
     
     # A. Estructura Base
-    alto_int = alto - zocalo - (espesor * 2) # Altura interna util total
+    alto_int = alto - zocalo - (espesor * 2) 
     ancho_int_total = ancho - (espesor * 2)
     
     piezas.append({"Pieza": "Lateral Externo", "Cant": 2, "Largo": alto, "Ancho": prof, "Veta": "↕️ Vert", "Mat": f"Melamina {espesor}"})
@@ -175,14 +173,13 @@ if st.button("🚀 CALCULAR DESPIECE Y HERRAJES", type="primary"):
         piezas.append({"Pieza": "Divisor Vertical", "Cant": cant_columnas-1, "Largo": alto_int, "Ancho": prof, "Veta": "↕️ Vert", "Mat": f"Melamina {espesor}"})
 
     # Calculo ancho exacto de cada columna (hueco)
-    # Ancho total - (laterales + divisores) / cantidad
     descuento_espesores = (espesor * 2) + ((cant_columnas - 1) * espesor)
     ancho_hueco = (ancho - descuento_espesores) / cant_columnas
 
     # B. Procesar Componentes
     for conf in configuracion_columnas:
         
-        # --- CAJONES (DETALLADO) ---
+        # --- CAJONES ---
         if conf["inf_tipo"] == "Cajonera":
             cant = conf["inf_data"]["cant"]
             h_modulo = conf["inf_data"]["alto"]
@@ -191,23 +188,19 @@ if st.button("🚀 CALCULAR DESPIECE Y HERRAJES", type="primary"):
             luz = 3
             alto_frente = (h_modulo / cant) - luz
             
-            # Partes
-            piezas.append({"Pieza": "Frente Cajón", "Cant": cant, "Largo": ancho_hueco-4, "Ancho": alto_frente, "Veta": veta_frentes, "Mat": f"Melamina {espesor}"})
-            
             # Estructura interna (Caja)
-            lateral_h = 150 # Estándar, o podríamos calcularlo
-            if alto_frente < 160: lateral_h = 100 # Si es muy bajo el frente
+            lateral_h = 150 # Estándar
+            if alto_frente < 160: lateral_h = 100 
             
+            piezas.append({"Pieza": "Frente Cajón", "Cant": cant, "Largo": ancho_hueco-4, "Ancho": alto_frente, "Veta": veta_frentes, "Mat": f"Melamina {espesor}"})
             piezas.append({"Pieza": "Lat. Cajón", "Cant": cant*2, "Largo": 500, "Ancho": lateral_h, "Veta": "↔️ Horiz", "Mat": "Blanca 18mm"})
             piezas.append({"Pieza": "Contra-Frente", "Cant": cant, "Largo": ancho_hueco-90, "Ancho": lateral_h, "Veta": "↔️ Horiz", "Mat": "Blanca 18mm"})
             piezas.append({"Pieza": "Fondo Cajón", "Cant": cant, "Largo": 500, "Ancho": ancho_hueco-90, "Veta": "---", "Mat": "Fibro 3mm"})
             
-            # Herrajes Cajón
             compras.append({"Item": "Correderas 500mm", "Cant": cant, "Unidad": "pares", "Nota": "Z o Telescópicas"})
             compras.append({"Item": "Tornillos 3.5x16", "Cant": cant*12, "Unidad": "u.", "Nota": "Fijación guías"})
         
         # --- PUERTAS ---
-        # Función auxiliar para calcular bisagras
         def calc_bisagras(h):
             if h < 900: return 2
             if h < 1600: return 3
@@ -217,12 +210,12 @@ if st.button("🚀 CALCULAR DESPIECE Y HERRAJES", type="primary"):
         if conf["inf_tipo"] == "Puerta Baja":
             h_p = conf["inf_data"]["alto"]
             piezas.append({"Pieza": "Puerta Baja", "Cant": 1, "Largo": h_p-4, "Ancho": ancho_hueco-4, "Veta": veta_frentes, "Mat": f"Melamina {espesor}"})
-            compras.append({"Item": "Bisagras 35mm", "Cant": calc_bisagras(h_p), "Unidad": "u.", "Nota": "Codo 0 o 9/18 según posición"})
+            compras.append({"Item": "Bisagras 35mm", "Cant": calc_bisagras(h_p), "Unidad": "u.", "Nota": "Codo 0 o 9"})
 
         if conf["inf_tipo"] == "Puerta Entera":
             h_p = alto - zocalo
             piezas.append({"Pieza": "Puerta Entera", "Cant": 1, "Largo": h_p-4, "Ancho": ancho_hueco-4, "Veta": veta_frentes, "Mat": f"Melamina {espesor}"})
-            compras.append({"Item": "Bisagras 35mm", "Cant": calc_bisagras(h_p), "Unidad": "u.", "Nota": ""})
+            compras.append({"Item": "Bisagras 35mm", "Cant": calc_bisagras(h_p), "Unidad": "u.", "Nota": "Codo 0"})
 
         # --- ESTANTES ---
         if conf["sup_tipo"] == "Estantes":
@@ -236,10 +229,9 @@ if st.button("🚀 CALCULAR DESPIECE Y HERRAJES", type="primary"):
             compras.append({"Item": "Soportes Barral", "Cant": 2, "Unidad": "u.", "Nota": ""})
 
     # C. Insumos Generales
-    tornillos_4x50 = (len(piezas) * 4) # Estimado estructural
+    tornillos_4x50 = (len(piezas) * 4) 
     compras.insert(0, {"Item": "Tornillos 4x50", "Cant": tornillos_4x50, "Unidad": "u.", "Nota": "Estructura"})
     
-    # Tapacantos
     metros_lineales = sum([(p["Largo"]+p["Ancho"])*2*p["Cant"] for p in piezas if "Melamina" in p["Mat"]]) / 1000
     compras.append({"Item": "Tapacanto PVC", "Cant": int(metros_lineales*1.2), "Unidad": "m", "Nota": "Incluye desp."})
 
@@ -251,6 +243,14 @@ if st.button("🚀 CALCULAR DESPIECE Y HERRAJES", type="primary"):
         df_piezas = pd.DataFrame(piezas)
         st.dataframe(df_piezas.style.format({"Largo": "{:.0f}", "Ancho": "{:.0f}"}), use_container_width=True, hide_index=True)
         
-        # Descarga
         csv = df_piezas.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Bajar CSV para Maderera", csv, "corte_v10.csv", "text/
+        st.download_button("📥 Bajar CSV para Maderera", csv, "corte_v10.csv", "text/csv")
+
+    with c_der:
+        st.write("### 🛒 Ferretería y Herrajes")
+        df_compras = pd.DataFrame(compras)
+        if not df_compras.empty:
+            df_compras = df_compras.groupby(["Item", "Unidad", "Nota"], as_index=False).sum()
+            st.dataframe(df_compras, use_container_width=True, hide_index=True)
+
+
