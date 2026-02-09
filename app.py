@@ -5,7 +5,7 @@ from PIL import Image
 # Reemplaza la configuración de la API por esta
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"], transport='grpc')
 model = genai.GenerativeModel('models/gemini-1.5-flash')
-st.title("🪚 CarpinterIA: Prototipo V0.1")
+st.title("🪚 CarpinterIA: Prototipo V0.2")
 
 # 2. Selector de archivo (Foto del mueble o croquis)
 archivo = st.file_uploader("Subí tu croquis o foto de referencia", type=['jpg', 'jpeg', 'png'])
