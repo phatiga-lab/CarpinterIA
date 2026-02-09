@@ -2,11 +2,19 @@ import streamlit as st
 import google.generativeai as genai
 from PIL import Image
 
-# 1. Configuración limpia
+# 1. Configuración de la API
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-# Usamos el nombre más básico posible
-model = genai.GenerativeModel('gemini-pro-vision') 
+# 2. Selección del modelo (Nombre limpio)
+model = genai.GenerativeModel('gemini-1.5-flash') 
+
+# OPCIONAL: Si querés ver si la llave funciona, agregá esto:
+try:
+    # Intento de respuesta simple para verificar conexión
+    test_response = model.generate_content("Hola")
+    st.sidebar.success("✅ Conexión con Google AI establecida")
+except Exception as e:
+    st.sidebar.error(f"❌ Error de conexión: {e}")
 # Si el anterior falla, probá con 'gemini-1.5-flash' (sin el models/)
 st.title("🪚 CarpinterIA: Prototipo V0.20")
 
