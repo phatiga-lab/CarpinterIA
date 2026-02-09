@@ -1,174 +1,145 @@
 import streamlit as st
 import google.generativeai as genai
 from PIL import Image
-
-# Configuración de la página
-st.set_page_config(page_title="CarpinterIA", page_icon="🪚")
-st.title("🪚 CarpinterIA: Versión 2.0")
-
-# 1. Configuración de API
-try:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-except Exception as e:
-    st.error("Falta configurar la API Key en los Secrets.")
-
-# --- SIDEBAR ---
-st.sidebar.header("Reglas de Taller")
-espesor = st.sidebar.selectbox("Espesor Placa", [18, 15, 12, 5.5], index=0)
-zocalo = st.sidebar.number_input("Zócalo (mm)", value=70)
-
-# --- FUNCIÓN DE ANÁLISIS ---
-def analizar_imagen(imagen_usuario):
-    # ACTUALIZADO: Usamos los modelos que vimos en tu diagnóstico
-    modelos_a_probar = ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.0-flash-lite']
-    
-    progreso = st.empty()
-    
-    for modelo_nombre in modelos_a_probar:
-        try:
-            progreso.info(f"Intentando conectar con: {modelo_nombre}...")
-            model = genai.GenerativeModel(modelo_nombre)
-            
-            prompt = """
-            Actúa como un carpintero experto. Analiza esta imagen técnica o croquis.
-            1. Identifica qué tipo de mueble es.
-            2. Estima el Ancho, Alto y Profundidad (si no hay medidas, usa proporciones).
-            3. Lista los herrajes necesarios (cantidad de bisagras, correderas, etc).
-            Responde en formato lista simple.
-            """
-            
-            response = model.generate_content([prompt, imagen_usuario])
-            progreso.empty()
-            return response.text, modelo_nombre
-            
-        except Exception as e:
-            # Si falla, probamos el siguiente de la lista
-            continue 
-            
-    progreso.error("Error de conexión con todos los modelos. Verificá tu API Key.")
-    return None, None
-
-# --- INTERFAZ ---
-st.write("### 1. Subir Croquis")
-archivo = st.file_uploader("Subí foto o dibujo", type=['jpg', 'jpeg', 'png'])
-
-if archivo:
-    img = Image.open(archivo)
-    st.image(img, caption="Referencia visual", width=300)
-    
-    if st.button("🔨 Analizar Mueble"):
-        with st.spinner("La IA está midiendo..."):
-            resultado, modelo_usado = analizar_imagen(img)
-            
-            if resultado:
-                st.success(f"¡Análisis completado usando {modelo_usado}!")
-                st.info(resultado)
-                st.write("---")
-                st.warning("⚠️ Recordá verificar las medidas en obra antes de cortar.")
-
-import streamlit as st
-import google.generativeai as genai
-from PIL import Image
 import json
 import pandas as pd
 
-# Configuración de página
-st.set_page_config(page_title="CarpinterIA Studio", layout="wide")
-st.title("🪚 CarpinterIA: Studio")
+# 1. Configuración Básica
+st.set_page_config(page_title="CarpinterIA Taller", page_icon="🪚")
+st.title("🪚 CarpinterIA: Taller Digital")
 
-# 1. Configuración de API
+# 2. Configuración API (Blindada)
 try:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 except:
-    st.error("Falta API Key")
+    st.error("⚠️ Falta configurar la API Key.")
 
-# --- SIDEBAR: PARÁMETROS DE TALLER ---
+# 3. Inicializar Memoria (Para que no se borren los datos al editar)
+if 'medidas' not in st.session_state:
+    st.session_state['medidas'] = {
+        "ancho": 900, 
+        "alto": 750, 
+        "prof": 450, 
+        "cajones": 0,
+        "nombre": "Mueble Nuevo"
+    }
+
+# --- BARRA LATERAL (Insumos) ---
 with st.sidebar:
-    st.header("📐 Configuración de Taller")
-    espesor = st.selectbox("Espesor Placa (mm)", [18, 15], index=0)
-    fondo = st.selectbox("Espesor Fondo (mm)", [3, 5.5, 18], index=1)
+    st.header("⚙️ Configuración Materiales")
+    espesor = st.selectbox("Placa Estructura", [18, 15, 25], index=0)
+    fondo = st.selectbox("Placa Fondo", [3, 5.5, 18], index=1)
     zocalo = st.number_input("Altura Zócalo (mm)", value=70)
 
-# --- CEREBRO: VISIÓN A DATOS ---
-def analizar_imagen_json(imagen):
-    model = genai.GenerativeModel('gemini-2.0-flash')
+# --- PASO 1: CARGA Y ANÁLISIS ---
+st.header("1. Referencia Visual")
+archivo = st.file_uploader("Subí tu diseño aquí", type=['jpg', 'jpeg', 'png'])
+
+if archivo:
+    img = Image.open(archivo)
+    st.image(img, width=300)
     
-    # Prompt de Ingeniería Inversa
-    prompt = """
-    Eres un software de despiece de muebles. Analiza la imagen.
-    Devuelve SOLO un objeto JSON con esta estructura exacta, sin texto extra:
-    {
-        "mueble": "Nombre del mueble",
-        "ancho_total_mm": 0,
-        "alto_total_mm": 0,
-        "profundidad_mm": 0,
-        "cant_cajones": 0,
-        "cant_puertas": 0,
-        "descripcion": "Breve nota técnica"
-    }
-    Si no hay medidas explícitas, estima basándote en estándares (ej: alto mesa 750mm).
-    """
-    try:
-        response = model.generate_content([prompt, imagen])
-        # Limpieza por si la IA agrega comillas de código
-        texto_limpio = response.text.replace("```json", "").replace("```", "")
-        return json.loads(texto_limpio)
-    except Exception as e:
-        return None
+    # Botón para llamar a la IA
+    if st.button("🔍 Analizar Medidas con IA"):
+        with st.spinner("Consultando a Gemini 2.0..."):
+            try:
+                # Usamos el modelo que sabemos que funciona
+                model = genai.GenerativeModel('gemini-2.0-flash')
+                
+                prompt = """
+                Analiza este mueble para despiece.
+                Estima Ancho, Alto, Profundidad en milimetros.
+                Cuenta los cajones.
+                Devuelve SOLO JSON: {"ancho": 0, "alto": 0, "prof": 0, "cajones": 0, "nombre": "texto"}
+                """
+                
+                response = model.generate_content([prompt, img])
+                texto_limpio = response.text.replace("```json", "").replace("```", "")
+                datos = json.loads(texto_limpio)
+                
+                # Guardamos en memoria
+                st.session_state['medidas'].update(datos)
+                st.success("¡Medidas detectadas! Podés corregirlas abajo.")
+                st.rerun() # Recarga la página para mostrar los números nuevos
+                
+            except Exception as e:
+                st.error(f"Error analizando: {e}")
 
-# --- INTERFAZ PRINCIPAL ---
-col1, col2 = st.columns([1, 2])
+st.markdown("---")
 
-with col1:
-    st.info("1. Carga tu diseño")
-    archivo = st.file_uploader("Subir foto/croquis", type=['jpg', 'png'])
-    if archivo:
-        img = Image.open(archivo)
-        st.image(img, use_column_width=True)
+# --- PASO 2: EDICIÓN MANUAL (Siempre visible) ---
+st.header("2. Definición de Medidas (Editable)")
+st.info("Acá podés corregir lo que la IA calculó mal. Estos son los números REALES para el corte.")
 
-with col2:
-    st.info("2. Definición Técnica")
+# Usamos columnas solo para los inputs numéricos para que quede ordenado
+c1, c2 = st.columns(2)
+
+with c1:
+    ancho_final = st.number_input("Ancho Final (mm)", value=int(st.session_state['medidas']['ancho']))
+    alto_final = st.number_input("Alto Final (mm)", value=int(st.session_state['medidas']['alto']))
+
+with c2:
+    prof_final = st.number_input("Profundidad (mm)", value=int(st.session_state['medidas']['prof']))
+    cant_cajones = st.number_input("Cant. Cajones", value=int(st.session_state['medidas']['cajones']))
+
+st.markdown("---")
+
+# --- PASO 3: BOTÓN DE ACCIÓN (Fuera de columnas, siempre visible) ---
+st.header("3. Resultado")
+
+# Este botón está en la raíz del código, IMPOSIBLE que no aparezca
+if st.button("🚀 CALCULAR DESPIECE FINAL", type="primary", use_container_width=True):
     
-    if archivo and st.button("🔨 Procesar Imagen"):
-        with st.spinner("Calculando estructura..."):
-            datos_ia = analizar_imagen_json(img)
-            
-            if datos_ia:
-                # Guardamos en sesión para que no se borre al editar
-                st.session_state['datos_mueble'] = datos_ia
-                st.success("¡Estructura detectada!")
-            else:
-                st.error("No se pudo interpretar la imagen. Intenta de nuevo.")
-
-    # Si ya tenemos datos, mostramos el editor
-    if 'datos_mueble' in st.session_state:
-        datos = st.session_state['datos_mueble']
-        
-        # TABLA EDITABLE: El usuario tiene la última palabra
-        df_medidas = pd.DataFrame({
-            "Parámetro": ["Ancho", "Alto", "Profundidad", "Cajones"],
-            "Valor": [datos['ancho_total_mm'], datos['alto_total_mm'], datos['profundidad_mm'], datos['cant_cajones']]
+    st.write(f"### 📋 Listado de Corte: {st.session_state['medidas']['nombre']}")
+    
+    # Lógica Matemática
+    alto_lateral = alto_final # Lateral va hasta el piso
+    ancho_techopiso = ancho_final - (espesor * 2) # Descuento de espesores
+    
+    # Armado de la lista
+    piezas = []
+    
+    # 1. Laterales
+    piezas.append({
+        "Pieza": "Lateral", 
+        "Cantidad": 2, 
+        "Largo (veta)": alto_lateral, 
+        "Ancho": prof_final, 
+        "Material": f"Melamina {espesor}mm"
+    })
+    
+    # 2. Piso y Techo
+    piezas.append({
+        "Pieza": "Techo/Piso", 
+        "Cantidad": 2, 
+        "Largo": ancho_techopiso, 
+        "Ancho": prof_final, 
+        "Material": f"Melamina {espesor}mm"
+    })
+    
+    # 3. Fondo
+    piezas.append({
+        "Pieza": "Fondo", 
+        "Cantidad": 1, 
+        "Largo": alto_final - 15, 
+        "Ancho": ancho_final - 15, 
+        "Material": f"Fibro {fondo}mm"
+    })
+    
+    # 4. Cajones (Si corresponde)
+    if cant_cajones > 0:
+        alto_frente = (alto_final - zocalo - 30) / cant_cajones
+        piezas.append({
+            "Pieza": "Frente Cajón", 
+            "Cantidad": cant_cajones, 
+            "Largo": ancho_final - 4, 
+            "Ancho": int(alto_frente), 
+            "Material": f"Melamina {espesor}mm"
         })
-        
-        st.write(f"**Detectado:** {datos['mueble']}")
-        df_editado = st.data_editor(df_medidas, num_rows="dynamic")
-        
-        # --- BOTÓN DE DESPIECE FINAL ---
-        if st.button("🚀 Generar Listado de Corte"):
-            st.write("---")
-            st.subheader("📋 Listado de Corte Optimizado")
-            
-            # Recuperamos valores editados por el usuario
-            ancho_final = df_editado.iloc[0, 1]
-            alto_final = df_editado.iloc[1, 1]
-            prof_final = df_editado.iloc[2, 1]
-            
-            # LÓGICA DE CARPINTERÍA (Tu fórmula)
-            lista_corte = [
-                {"Pieza": "Lateral", "Cant": 2, "Largo": alto_final, "Ancho": prof_final, "Material": f"Melamina {espesor}mm", "Veta": "Vertical"},
-                {"Pieza": "Techo/Piso", "Cant": 2, "Largo": ancho_final - (espesor*2), "Ancho": prof_final, "Material": f"Melamina {espesor}mm", "Veta": "Horizontal"},
-                {"Pieza": "Fondo", "Cant": 1, "Largo": alto_final-10, "Ancho": ancho_final-10, "Material": f"Fibro {fondo}mm", "Nota": "Clavado"}
-            ]
-            
-            st.table(pd.DataFrame(lista_corte))
-            st.balloons()
+        st.info(f"💡 Se calcularon {cant_cajones} cajones con frentes de {int(alto_frente)}mm de alto.")
+
+    # Mostrar Tabla
+    df = pd.DataFrame(piezas)
+    st.dataframe(df, use_container_width=True)
+    
+    st.success("✅ ¡Cálculo completado! Copiá esta tabla para el aserradero.")
