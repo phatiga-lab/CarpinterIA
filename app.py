@@ -1,144 +1,177 @@
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(page_title="CarpinterIA: V5 Full", page_icon="🪚", layout="wide")
-st.title("🪚 CarpinterIA: Calculadora Completa")
+st.set_page_config(page_title="CarpinterIA: Universal", page_icon="🪚", layout="wide")
+st.title("🪚 CarpinterIA: Diseño Universal (V6)")
 
 # --- 1. CONFIGURACIÓN LATERAL ---
 with st.sidebar:
-    st.header("⚙️ Configuración Taller")
+    st.header("⚙️ Materiales y Herrajes")
     espesor = st.selectbox("Espesor Estructura", [18, 15], index=0)
     fondo_esp = st.selectbox("Espesor Fondo", [3, 5.5, 18], index=1)
-    zocalo = st.number_input("Zócalo (mm)", value=70, help="0 si es flotante")
+    zocalo = st.number_input("Zócalo (mm)", value=70)
     
     st.divider()
-    st.header("🎨 Diseño de Cajones")
-    veta_frentes = st.radio("Veta en Frentes", ["↔️ Horizontal", "↕️ Vertical"], index=0)
+    st.header("🎨 Vetas y Terminación")
+    veta_frentes = st.radio("Veta (Frentes/Puertas)", ["↔️ Horizontal", "↕️ Vertical"], index=1)
     
     st.divider()
-    st.header("🛠️ Estrategia de Laterales")
-    modo_lateral = st.radio(
-        "¿Cómo definimos la altura del lateral?",
-        ["Automático (Máximo Posible)", "Manual (Forzar Medida)"]
-    )
-    
-    lateral_manual = 0
-    if modo_lateral == "Manual (Forzar Medida)":
-        lateral_manual = st.number_input(
-            "Altura deseada (mm)", 
-            min_value=70, max_value=400, step=10, value=150
-        )
+    st.info("ℹ️ Los estantes se calculan con 20mm de retiro frontal para que cierre la puerta.")
 
 # --- 2. DEFINICIÓN DEL MUEBLE ---
-st.subheader("1. Definición de Medidas")
+st.subheader("1. Dimensiones del Casco")
 c1, c2, c3 = st.columns(3)
 with c1:
     ancho = st.number_input("Ancho Total (mm)", value=900)
-    alto = st.number_input("Alto Total (mm)", value=720)
+    alto = st.number_input("Alto Total (mm)", value=1800)
 with c2:
-    prof = st.number_input("Profundidad (mm)", value=500)
-    cant_cajones_total = st.number_input("Total Cajones", value=4)
+    prof = st.number_input("Profundidad (mm)", value=550)
+    columnas = st.number_input("Columnas Verticales", value=1, min_value=1)
 with c3:
-    columnas = st.number_input("Columnas", value=1, min_value=1)
+    # CONFIGURACIÓN INTERNA
+    st.write("Componentes:")
+    cant_cajones = st.number_input("Cant. Cajones", value=0)
+    cant_puertas = st.number_input("Cant. Puertas", value=2)
+    cant_estantes = st.number_input("Cant. Estantes Móviles", value=3)
 
-# Feedback
-cajones_por_columna = cant_cajones_total / columnas
-if cajones_por_columna % 1 != 0:
-    st.warning(f"⚠️ {cant_cajones_total} cajones no se reparten igual en {columnas} columnas.")
+# Lógica de Altura de Puerta (Si hay puertas)
+alto_puerta = 0
+if cant_puertas > 0:
+    st.markdown("---")
+    c_p1, c_p2 = st.columns(2)
+    with c_p1:
+        st.write("📏 **Configuración de Puertas**")
+        tipo_cobertura = st.radio("Altura de Puertas:", ["Cubren todo el frente", "Definir altura manual"], index=0)
+    with c_p2:
+        if tipo_cobertura == "Definir altura manual":
+            alto_puerta = st.number_input("Alto de la Puerta (mm)", value=int(alto-zocalo))
+        else:
+            alto_puerta = alto - zocalo # Por defecto cubre todo menos zocalo
+            st.info(f"Altura calculada: {alto_puerta}mm")
 
 st.markdown("---")
 
 # --- 3. MOTOR DE CÁLCULO ---
-if st.button("🚀 CALCULAR TODO (Despiece + Compras)", type="primary", use_container_width=True):
+if st.button("🚀 CALCULAR PROYECTO COMPLETO", type="primary", use_container_width=True):
     
     piezas = []
-    alertas = []
+    compras = [] # Nueva lista para el detalle de herrajes
     
-    # --- A. CÁLCULO ESTRUCTURAL ---
-    alto_lateral = alto
+    # --- A. ESTRUCTURA (CASCO) ---
     ancho_interno_total = ancho - (espesor * 2)
-    alto_util_modulo = alto - zocalo - (espesor * 2)
+    alto_util = alto - zocalo - (espesor * 2)
     
-    piezas.append({"Pieza": "Lateral Ext.", "Cant": 2, "Largo": alto_lateral, "Ancho": prof, "Veta": "↕️ Vertical", "Mat": f"Melamina {espesor}"})
+    piezas.append({"Pieza": "Lateral Ext.", "Cant": 2, "Largo": alto, "Ancho": prof, "Veta": "↕️ Vertical", "Mat": f"Melamina {espesor}"})
     piezas.append({"Pieza": "Techo/Piso", "Cant": 2, "Largo": ancho_interno_total, "Ancho": prof, "Veta": "↔️ Horizontal", "Mat": f"Melamina {espesor}"})
-    piezas.append({"Pieza": "Fondo Mueble", "Cant": 1, "Largo": alto-15, "Ancho": ancho-15, "Veta": "Indistinto", "Mat": f"Fibro {fondo_esp}"})
+    piezas.append({"Pieza": "Fondo", "Cant": 1, "Largo": alto-15, "Ancho": ancho-15, "Veta": "Indistinto", "Mat": f"Fibro {fondo_esp}"})
     
+    # Divisores
     if columnas > 1:
-        piezas.append({"Pieza": "Divisor Vert.", "Cant": columnas - 1, "Largo": alto_util_modulo, "Ancho": prof, "Veta": "↕️ Vertical", "Mat": f"Melamina {espesor}"})
-
-    # --- B. LÓGICA DE CAJONES ---
-    if cant_cajones_total > 0 and cajones_por_columna % 1 == 0:
-        cajones_por_col = int(cajones_por_columna)
+        piezas.append({"Pieza": "Divisor Vert.", "Cant": columnas - 1, "Largo": alto_util, "Ancho": prof, "Veta": "↕️ Vertical", "Mat": f"Melamina {espesor}"})
+        
+        # Recalcular ancho hueco para componentes
         descuento_parantes = (columnas - 1) * espesor
         ancho_hueco = (ancho_interno_total - descuento_parantes) / columnas
-        luz_entre_cajones = 3 
-        alto_frente = (alto_util_modulo - ((cajones_por_col - 1) * luz_entre_cajones)) / cajones_por_col
+    else:
+        ancho_hueco = ancho_interno_total
+
+    # --- B. ESTANTES ---
+    if cant_estantes > 0:
+        piezas.append({
+            "Pieza": "Estante Móvil", 
+            "Cant": cant_estantes, 
+            "Largo": ancho_hueco - 2, # 2mm de luz para que entre fácil
+            "Ancho": prof - 20, # Retiro para que no choque la puerta
+            "Veta": "↔️ Horizontal", 
+            "Mat": f"Melamina {espesor}"
+        })
+        # Herrajes Estantes
+        compras.append({"Item": "Soportes Estante", "Cant": cant_estantes * 4, "Unidad": "u.", "Uso": "4 por cada estante"})
+
+    # --- C. PUERTAS ---
+    if cant_puertas > 0:
+        # Cálculo de ancho de puerta
+        ancho_puerta = 0
+        if cant_puertas == 1:
+            ancho_puerta = ancho - 4 # 2mm luz x lado
+        elif cant_puertas >= 2:
+            # Asumimos puertas pares cubriendo el ancho total
+            # (Ancho - 2mm izq - 2mm der - 2mm centro) / 2
+            ancho_puerta = (ancho - 6) / cant_puertas
+            
+        piezas.append({
+            "Pieza": "Puerta", 
+            "Cant": cant_puertas, 
+            "Largo": alto_puerta, 
+            "Ancho": ancho_puerta, 
+            "Veta": veta_frentes, 
+            "Mat": f"Melamina {espesor}"
+        })
         
-        # Validación de Altura
-        margen_seguridad = 25 
-        max_lateral_posible = int(alto_frente - margen_seguridad)
-        lateral_final = 0
+        # Cálculo de Bisagras (Regla de carpintero)
+        bisagras_por_puerta = 2
+        if alto_puerta > 900: bisagras_por_puerta = 3
+        if alto_puerta > 1600: bisagras_por_puerta = 4
+        if alto_puerta > 2100: bisagras_por_puerta = 5
         
-        if max_lateral_posible < 70:
-            st.error(f"❌ Los cajones son muy bajos ({int(alto_frente)}mm). No entran laterales.")
-        else:
-            if modo_lateral == "Automático (Máximo Posible)":
-                lateral_final = (max_lateral_posible // 10) * 10
-                alertas.append(f"ℹ️ Lateral calculado: {lateral_final}mm")
-            else: 
-                if lateral_manual <= max_lateral_posible:
-                    lateral_final = lateral_manual
-                else:
-                    lateral_final = (max_lateral_posible // 10) * 10
-                    alertas.append(f"⚠️ Se redujo el lateral a {lateral_final}mm para que entre.")
+        compras.append({
+            "Item": "Bisagras Cazoleta 35mm", 
+            "Cant": cant_puertas * bisagras_por_puerta, 
+            "Unidad": "u.", 
+            "Uso": f"{bisagras_por_puerta} por puerta (Codo 0 si es lateral ext)"
+        })
 
-        # Piezas Cajón
-        if lateral_final >= 70:
-            piezas.append({"Pieza": "Frente Cajón", "Cant": cant_cajones_total, "Largo": ancho_hueco-4, "Ancho": alto_frente, "Veta": veta_frentes, "Mat": f"Melamina {espesor}"})
-            piezas.append({"Pieza": "Lat. Cajón", "Cant": cant_cajones_total * 2, "Largo": 500, "Ancho": lateral_final, "Veta": "↔️ Horizontal", "Mat": "Blanca 18mm"})
-            piezas.append({"Pieza": "Contra-Frente", "Cant": cant_cajones_total, "Largo": ancho_hueco-90, "Ancho": lateral_final, "Veta": "↔️ Horizontal", "Mat": "Blanca 18mm"})
-            piezas.append({"Pieza": "Fondo Cajón", "Cant": cant_cajones_total, "Largo": 500, "Ancho": ancho_hueco-90, "Veta": "Indistinto", "Mat": "Fibro 3mm"})
+    # --- D. CAJONES ---
+    if cant_cajones > 0:
+        # Asumimos que los cajones van en UNA columna o se reparten. 
+        # Para simplificar V6: Calculamos material para X cajones del ancho del hueco.
+        # Altura: Asumimos 180mm por defecto si no hay restricción, o calculamos.
+        alto_frente_cajon = 180 # Estándar
+        lateral_cajon = 150 # Estándar
+        
+        piezas.append({"Pieza": "Frente Cajón", "Cant": cant_cajones, "Largo": ancho_hueco-4, "Ancho": alto_frente_cajon, "Veta": veta_frentes, "Mat": f"Melamina {espesor}"})
+        piezas.append({"Pieza": "Lat. Cajón", "Cant": cant_cajones*2, "Largo": 500, "Ancho": lateral_cajon, "Veta": "↔️ Horizontal", "Mat": "Blanca 18mm"})
+        piezas.append({"Pieza": "Contra-Frente", "Cant": cant_cajones, "Largo": ancho_hueco-90, "Ancho": lateral_cajon, "Veta": "↔️ Horizontal", "Mat": "Blanca 18mm"})
+        piezas.append({"Pieza": "Fondo Cajón", "Cant": cant_cajones, "Largo": 500, "Ancho": ancho_hueco-90, "Veta": "Indistinto", "Mat": "Fibro 3mm"})
+        
+        compras.append({"Item": "Correderas Z/Telescópicas", "Cant": cant_cajones, "Unidad": "pares", "Uso": "1 par por cajón (500mm)"})
+        compras.append({"Item": "Tornillos 3.5x16mm", "Cant": cant_cajones * 12, "Unidad": "u.", "Uso": "Fijación correderas"})
 
-    # --- C. CÁLCULO DE INSUMOS (RECUPERADO) ---
-    tornillos_4x50 = (len(piezas) * 4) + (cant_cajones_total * 8) # Estructura + Armado Cajones
-    tornillos_3x16 = cant_cajones_total * 12 # 6 por guía
-    correderas = cant_cajones_total
+    # --- E. TORNILLERÍA GRUESA ---
+    # Estructura básica
+    tornillos_estruc = (len(piezas) * 4) 
+    compras.insert(0, {"Item": "Tornillos 4x50mm", "Cant": int(tornillos_estruc), "Unidad": "u.", "Uso": "Armado estructural del casco"})
     
-    metros_canto = 0
-    for p in piezas:
-        if "Melamina" in p["Mat"]: 
-            # Perímetro x Cantidad / 1000 para pasar a metros
-            metros_canto += ((p["Largo"] + p["Ancho"]) * 2 * p["Cant"]) / 1000
-    
-    canto_pvc = metros_canto * 1.2 # 20% desperdicio
+    if fondo_esp == 18:
+        compras.append({"Item": "Tornillos 4x40mm", "Cant": 20, "Unidad": "u.", "Uso": "Fijación de Fondo 18mm"})
+    else:
+        compras.append({"Item": "Clavos / Grapas", "Cant": 50, "Unidad": "u.", "Uso": "Fijación Fondo Fibro"})
 
-    # --- D. MOSTRAR RESULTADOS ---
-    col_izq, col_der = st.columns([2, 1])
+    # --- VISUALIZACIÓN ---
+    col_izq, col_der = st.columns([1.5, 1])
     
     with col_izq:
         st.write("### 📋 Listado de Corte")
-        for a in alertas: st.info(a)
-            
-        df = pd.DataFrame(piezas)
-        st.dataframe(df.style.format({"Largo": "{:.1f}", "Ancho": "{:.1f}"}), use_container_width=True, hide_index=True)
+        df_piezas = pd.DataFrame(piezas)
+        st.dataframe(df_piezas.style.format({"Largo": "{:.1f}", "Ancho": "{:.1f}"}), use_container_width=True, hide_index=True)
         
-        csv = df.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Descargar CSV", csv, "despiece_completo.csv", "text/csv")
+        # Botón CSV
+        csv = df_piezas.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Descargar Planilla Corte", csv, "corte_v6.csv", "text/csv")
 
     with col_der:
-        st.write("### 🛒 Lista de Compras")
-        st.success(f"**Tornillos 4x50mm:** {int(tornillos_4x50)} u.")
-        if fondo_esp == 18:
-            st.success(f"**Tornillos 4x40mm:** {int(tornillos_4x50/2)} u.")
-        else:
-            st.info(f"**Clavos/Grapas:** {int(tornillos_4x50)} u.")
-            
-        st.warning(f"**Tornillos 3.5x16:** {int(tornillos_3x16)} u.")
-        st.warning(f"**Correderas 500mm:** {correderas} pares")
-        st.error(f"**Canto PVC:** {canto_pvc:.1f} m (incluye 20% desp.)")
+        st.write("### 🛒 Lista de Compras (Con Referencia)")
+        df_compras = pd.DataFrame(compras)
+        st.dataframe(
+            df_compras, 
+            use_container_width=True, 
+            hide_index=True,
+            column_config={
+                "Item": st.column_config.TextColumn("Herraje", width="medium"),
+                "Uso": st.column_config.TextColumn("¿Para qué sirve?", width="large"),
+            }
+        )
         
-        if cant_cajones_total > 0:
-            st.markdown("---")
-            st.write("**Datos Técnicos:**")
-            st.caption(f"Alto Frente: {alto_frente:.1f}mm")
-            st.caption(f"Lateral Usado: {lateral_final}mm")
+        # Cálculo de Tapacantos
+        metros = sum([((p["Largo"]+p["Ancho"])*2*p["Cant"])/1000 for p in piezas if "Melamina" in p["Mat"]])
+        st.warning(f"**Tapacanto PVC:** Comprar aprox {metros*1.2:.1f} metros.")
