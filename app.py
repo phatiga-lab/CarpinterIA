@@ -1,87 +1,111 @@
 import streamlit as st
 import pandas as pd
-from PIL import Image
-import google.generativeai as genai
 
 # Configuración visual
-st.set_page_config(page_title="CarpinterIA: Calculadora", page_icon="🪚")
-st.title("🪚 CarpinterIA: Calculadora de Corte")
+st.set_page_config(page_title="CarpinterIA: Pro", page_icon="🪚", layout="wide")
+st.title("🪚 CarpinterIA: Calculadora Profesional")
 
-# --- 1. CONFIGURACIÓN LATERAL (SIEMPRE VISIBLE) ---
+# --- 1. CONFIGURACIÓN LATERAL ---
 with st.sidebar:
-    st.header("⚙️ Materiales")
+    st.header("⚙️ Configuración Taller")
     espesor = st.selectbox("Espesor Placa (mm)", [18, 15, 25], index=0)
     fondo = st.selectbox("Espesor Fondo (mm)", [3, 5.5, 18], index=1)
     zocalo = st.number_input("Altura Zócalo (mm)", value=70)
     
     st.divider()
-    st.caption("Estado del Sistema:")
-    # Intento silencioso de conexión (no rompe la app si falla)
-    api_status = "🔴 Desconectado"
-    try:
-        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        api_status = "🟢 API Key Detectada"
-    except:
-        api_status = "🔴 Falta API Key"
-    st.text(api_status)
+    st.info("💡 Tip: Para frentes continuos, cortá la tira completa primero.")
 
-# --- 2. ZONA DE IA (OPCIONAL Y COLAPSABLE) ---
-with st.expander("📸 Cargar Croquis / Foto (Opcional)"):
-    archivo = st.file_uploader("Subí una imagen para intentar leer medidas", type=['jpg', 'png'])
-    if archivo:
-        img = Image.open(archivo)
-        st.image(img, width=200)
-        
-        if st.button("Tratar de leer medidas con IA"):
-            try:
-                # Intento con el modelo más básico y estable
-                model = genai.GenerativeModel('gemini-1.5-flash-latest')
-                response = model.generate_content(["Dime solo el ancho y alto estimado de este mueble en mm. Formato: Ancho: X, Alto: Y", img])
-                st.info(f"🤖 La IA sugiere: {response.text}")
-            except Exception as e:
-                st.warning(f"La IA no pudo leer la foto (Error de Google), pero podés cargar los datos abajo manualmente.\nDetalle: {e}")
+# --- 2. ZONA DE TRABAJO ---
+st.subheader("📐 Definición del Mueble")
 
-# --- 3. ZONA DE TRABAJO (LO IMPORTANTE) ---
-st.subheader("📐 Definición de Medidas")
-st.write("Ingresá las medidas finales del mueble para generar el corte.")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    # Usamos session_state para que no se borren los números
-    ancho = st.number_input("Ancho Final (mm)", value=900, step=10)
-    alto = st.number_input("Alto Final (mm)", value=750, step=10)
-
-with col2:
-    prof = st.number_input("Profundidad (mm)", value=450, step=10)
-    cajones = st.number_input("Cantidad de Cajones", value=0, step=1)
+c1, c2, c3 = st.columns(3)
+with c1:
+    ancho = st.number_input("Ancho Final (mm)", value=1130, step=10)
+    alto = st.number_input("Alto Final (mm)", value=800, step=10)
+with c2:
+    prof = st.number_input("Profundidad (mm)", value=550, step=10)
+    cajones = st.number_input("Cant. Cajones", value=3, step=1)
+with c3:
+    cant_estantes = st.number_input("Cant. Estantes", value=0, step=1)
+    tipo_herraje = st.selectbox("Guías", ["Telescópicas", "Push", "Z"], index=0)
 
 st.markdown("---")
 
-# --- 4. BOTÓN DE CÁLCULO (GARANTIZADO) ---
-if st.button("🚀 CALCULAR DESPIECE AHORA", type="primary", use_container_width=True):
+# --- 3. MOTOR DE CÁLCULO ---
+if st.button("🚀 GENERAR PLANILLA DE TALLER", type="primary", use_container_width=True):
     
-    # Lógica de Carpintería
-    alto_lateral = alto
-    ancho_piso = ancho - (espesor * 2)
+    # --- A. LÓGICA DE DESPIECE ---
+    alto_lateral = alto # Laterales al piso
+    ancho_piso = ancho - (espesor * 2) # Descuento estándar
     
-    # Lista de Piezas
-    piezas = [
-        {"Pieza": "Lateral", "Cant": 2, "Medidas": f"{alto_lateral} x {prof} mm", "Material": f"Melamina {espesor}"},
-        {"Pieza": "Techo/Piso", "Cant": 2, "Medidas": f"{ancho_piso} x {prof} mm", "Material": f"Melamina {espesor}"},
-        {"Pieza": "Fondo", "Cant": 1, "Medidas": f"{alto-15} x {ancho-15} mm", "Material": f"Fibro {fondo}"}
-    ]
+    piezas = []
     
-    # Lógica de Cajones
-    if cajones > 0:
-        alto_frente = (alto - zocalo - 30) / cajones
-        piezas.append({"Pieza": "Frente Cajón", "Cant": cajones, "Medidas": f"{int(alto_frente)} x {ancho-4} mm", "Material": f"Melamina {espesor}"})
-        # Laterales de cajón (estándar)
-        piezas.append({"Pieza": "Lat. Cajón", "Cant": cajones*2, "Medidas": f"500 x 150 mm", "Material": "Melamina Blanca"})
+    # 1. ESTRUCTURA
+    piezas.append({
+        "Pieza": "Lateral", "Cant": 2, 
+        "Largo (Veta)": alto_lateral, "Ancho": prof, 
+        "Veta": "↕️ Vertical", "Material": f"Melamina {espesor}"
+    })
+    
+    piezas.append({
+        "Pieza": "Techo/Piso", "Cant": 2, 
+        "Largo (Veta)": ancho_piso, "Ancho": prof, 
+        "Veta": "↔️ Horizontal", "Material": f"Melamina {espesor}"
+    })
+    
+    # 2. FONDO
+    piezas.append({
+        "Pieza": "Fondo", "Cant": 1, 
+        "Largo (Veta)": alto-15, "Ancho": ancho-15, 
+        "Veta": "Indistinto", "Material": f"Fibro {fondo}"
+    })
 
-    # Mostrar Resultados
-    st.success("✅ Despiece Generado Exitosamente")
-    df = pd.DataFrame(piezas)
-    st.dataframe(df, use_container_width=True)
+    # 3. CAJONES
+    if cajones > 0:
+        # Frente: Descuento de luz (4mm total)
+        alto_frente = (alto - zocalo - 30) / cajones 
+        piezas.append({
+            "Pieza": "Frente Cajón", "Cant": cajones, 
+            "Largo (Veta)": ancho-4, "Ancho": int(alto_frente), 
+            "Veta": "↔️ Horizontal (Continuo)", "Material": f"Melamina {espesor}"
+        })
+        
+        # Estructura interna cajón
+        piezas.append({
+            "Pieza": "Lat. Cajón", "Cant": cajones*2, 
+            "Largo (Veta)": 500, "Ancho": 150, 
+            "Veta": "↔️ Horizontal", "Material": "Blanca 18mm"
+        })
+        piezas.append({
+            "Pieza": "Contra-Frente", "Cant": cajones*2, 
+            "Largo (Veta)": ancho_piso - 90, "Ancho": 150, # 90mm descuento guías+laterales
+            "Veta": "↔️ Horizontal", "Material": "Blanca 18mm"
+        })
+
+    # --- B. RESULTADOS ---
+    col_izq, col_der = st.columns([2, 1])
     
-    st.caption("Nota: Las medidas de cajones son sugeridas. Verificar luz de correderas.")
+    with col_izq:
+        st.write("### 📋 Listado de Corte")
+        df = pd.DataFrame(piezas)
+        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.caption("Nota: 'Largo (Veta)' indica la dirección del dibujo de la madera.")
+
+    with col_der:
+        st.write("### 🔩 Insumos Estimados")
+        
+        # Cálculo de tornillos (Estimación x Pieza)
+        tornillos_4x50 = (len(piezas) * 4) + (cajones * 8)
+        tornillos_3x16 = (cajones * 12) # 6 por guía
+        
+        # Cálculo de Tapacanto (Perímetro aproximado)
+        metros_canto = ((ancho + alto) * 2 / 1000) * 1.5 # 50% desperdicio/error
+        
+        st.info(f"**Tornillos 4x50mm:** {int(tornillos_4x50)} u. (Estructura)")
+        if fondo == 18:
+            st.info(f"**Tornillos 4x40mm:** {int(tornillos_4x50/2)} u. (Fondos)")
+        else:
+            st.info(f"**Clavos/Grapas:** {int(tornillos_4x50)} u.")
+            
+        st.success(f"**Tornillos 3.5x16:** {int(tornillos_3x16)} u. (Guías)")
+        st.warning(f"**Tapacanto:** {metros_canto:.1f} metros aprox.")
