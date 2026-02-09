@@ -9,11 +9,21 @@ with st.sidebar:
     st.header("⚙️ Materiales")
     espesor = st.selectbox("Espesor Estructura", [18, 15], index=0)
     fondo_esp = st.selectbox("Espesor Fondo", [3, 5.5, 18], index=1)
-    zocalo = st.number_input("Zócalo (mm)", value=70)
+    zocalo = st.number_input("Zócalo (mm)", value=70, help="Poné 0 si es mueble colgante")
     
     st.divider()
-    st.header("🎨 Diseño")
-    veta_frentes = st.radio("Veta en Frentes de Cajón", ["↔️ Horizontal", "↕️ Vertical"], index=0)
+    st.header("🎨 Diseño de Cajones")
+    veta_frentes = st.radio("Veta en Frentes", ["↔️ Horizontal", "↕️ Vertical"], index=0)
+    
+    st.divider()
+    st.header("🛠️ Forzar Medidas")
+    # AQUÍ ESTÁ LA SOLUCIÓN: VOS DECIDÍS LA ALTURA
+    altura_lateral_forzada = st.selectbox(
+        "Altura Lateral de Cajón", 
+        ["Automático", "100 mm", "120 mm", "150 mm", "180 mm", "200 mm"],
+        index=0,
+        help="Si ponés Automático, el sistema decide según el espacio."
+    )
 
 # --- 2. DEFINICIÓN DEL MUEBLE ---
 st.subheader("1. Dimensiones y Distribución")
@@ -26,16 +36,14 @@ with c2:
     prof = st.number_input("Profundidad (mm)", value=550)
     cant_cajones_total = st.number_input("Total de Cajones", value=9)
 with c3:
-    # AQUÍ ESTÁ LA SOLUCIÓN: Columnas
-    columnas = st.number_input("Cantidad de Columnas", value=3, min_value=1, help="Si ponés 1, apila todo. Si ponés 3, divide el ancho en 3 módulos.")
-    
-# Lógica de distribución visual para el usuario
-cajones_por_columna = cant_cajones_total / columnas
+    columnas = st.number_input("Cantidad de Columnas", value=3, min_value=1)
 
-if cajones_por_columna % 1 != 0:
-    st.warning(f"⚠️ Atención: {cant_cajones_total} cajones no se pueden dividir exactamente en {columnas} columnas.")
+# Feedback visual inmediato
+cajones_por_columna = cant_cajones_total / columnas
+if cajones_por_columna % 1 == 0:
+    st.info(f"💡 Estructura: **{columnas} columnas** de **{int(cajones_por_columna)} cajones** cada una.")
 else:
-    st.info(f"💡 Interpretación: El mueble tendrá **{columnas} columnas** con **{int(cajones_por_columna)} cajones** cada una.")
+    st.warning(f"⚠️ {cant_cajones_total} cajones no se reparten igual en {columnas} columnas.")
 
 st.markdown("---")
 
@@ -43,122 +51,82 @@ st.markdown("---")
 if st.button("🚀 CALCULAR DESPIECE DETALLADO", type="primary", use_container_width=True):
     
     piezas = []
-    alertas = []
-
+    
     # --- A. CÁLCULOS ESTRUCTURALES ---
-    
-    # 1. Laterales Externos (Siempre van hasta el piso en este modelo)
     alto_lateral = alto
-    piezas.append({"Pieza": "Lateral Externo", "Cant": 2, "Largo": alto_lateral, "Ancho": prof, "Veta": "↕️ Vertical", "Mat": f"Melamina {espesor}"})
-    
-    # 2. Piso y Techo (Van entre laterales externos)
-    # Descuento: Ancho total - 2 espesores laterales
     ancho_interno_total = ancho - (espesor * 2)
+    
+    # 1. Estructura Básica
+    piezas.append({"Pieza": "Lateral Externo", "Cant": 2, "Largo": alto_lateral, "Ancho": prof, "Veta": "↕️ Vertical", "Mat": f"Melamina {espesor}"})
     piezas.append({"Pieza": "Techo/Piso", "Cant": 2, "Largo": ancho_interno_total, "Ancho": prof, "Veta": "↔️ Horizontal", "Mat": f"Melamina {espesor}"})
-    
-    # 3. Parantes / Divisores Verticales (Si hay más de 1 columna)
-    # Van entre piso y techo.
-    espacio_vertical_interno = alto - (espesor * 2) - zocalo # Asumiendo zócalo independiente o integrado
-    # Ajuste: Si el lateral baja al piso, el espacio interior es Alto - Zocalo (si hay) - Techo - Piso?
-    # Simplificación estándar: Laterales al piso. Piso elevado a nivel de zocalo. Techo arriba.
-    # Espacio útil vertical = Alto - Zocalo - Espesor(Techo) - Espesor(Piso)
+    piezas.append({"Pieza": "Fondo Mueble", "Cant": 1, "Largo": alto-15, "Ancho": ancho-15, "Veta": "Indistinto", "Mat": f"Fibro {fondo_esp}"})
+
+    # 2. Divisores (Parantes)
     alto_util_modulo = alto - zocalo - (espesor * 2)
-    
     if columnas > 1:
-        cant_parantes = columnas - 1
-        piezas.append({"Pieza": "Divisor Vertical", "Cant": cant_parantes, "Largo": alto_util_modulo, "Ancho": prof, "Veta": "↕️ Vertical", "Mat": f"Melamina {espesor}"})
-        
-    # 4. Fondo
-    piezas.append({"Pieza": "Fondo", "Cant": 1, "Largo": alto-15, "Ancho": ancho-15, "Veta": "Indistinto", "Mat": f"Fibro {fondo_esp}"})
+        piezas.append({"Pieza": "Divisor Vertical", "Cant": columnas - 1, "Largo": alto_util_modulo, "Ancho": prof, "Veta": "↕️ Vertical", "Mat": f"Melamina {espesor}"})
 
     # --- B. CÁLCULO DE CAJONES ---
-    
-    if cant_cajones_total > 0:
-        # 1. Calcular Ancho de cada Módulo (Hueco)
-        # Ancho interno total - (espesor de parantes)
+    if cant_cajones_total > 0 and cajones_por_columna % 1 == 0:
+        cajones_por_col = int(cajones_por_columna)
+        
+        # Ancho de Frente
         descuento_parantes = (columnas - 1) * espesor
         ancho_libre_total = ancho_interno_total - descuento_parantes
         ancho_hueco = ancho_libre_total / columnas
+        ancho_frente_real = ancho_hueco - 4 # 2mm luz por lado
         
-        # 2. Calcular Alto de cada Frente
-        # Alto útil / cantidad de cajones por columna - (luces)
-        luz_entre_cajones = 3 # mm
-        alto_frente = (alto_util_modulo - (cajones_por_columna * luz_entre_cajones)) / cajones_por_columna
+        # Alto de Frente
+        luz_entre_cajones = 3 
+        alto_frente = (alto_util_modulo - ((cajones_por_col - 1) * luz_entre_cajones)) / cajones_por_col
         
-        # 3. Validar si entra un lateral de 150mm
-        # El espacio útil del cajón suele ser Frente - 30mm (margen)
-        espacio_interno_cajon = alto_frente - 15 
+        # --- LÓGICA DE ALTURA LATERAL (CORREGIDA) ---
+        altura_final_lat = 0
         
-        altura_lateral_sugerida = 0
-        if espacio_interno_cajon >= 160:
-            altura_lateral_sugerida = 150 # Estándar
-        elif espacio_interno_cajon >= 110:
-            altura_lateral_sugerida = 100 # Bajo
+        if altura_lateral_forzada != "Automático":
+            # Si el usuario mandó una medida, usamos esa
+            altura_final_lat = int(altura_lateral_forzada.split(" ")[0])
         else:
-            altura_lateral_sugerida = int(espacio_interno_cajon - 10)
-            alertas.append(f"⚠️ **Cuidado:** Los cajones son muy bajos ({int(alto_frente)}mm de frente). No entra un lateral estándar de 150mm. Se sugiere cortar laterales a {altura_lateral_sugerida}mm.")
+            # Lógica Automática (Más permisiva ahora)
+            # Si el frente mide 160, entra un lateral de 150 (sobran 10mm)
+            if alto_frente >= 155:
+                altura_final_lat = 150
+            elif alto_frente >= 125:
+                altura_final_lat = 120
+            elif alto_frente >= 105:
+                altura_final_lat = 100
+            else:
+                altura_final_lat = int(alto_frente - 15)
 
-        # AGREGAR PIEZAS DE CAJÓN
-        
-        # Frentes
-        # Ancho frente = Ancho hueco - luz lateral (ej 2mm por lado = 4mm)
-        ancho_frente_real = ancho_hueco - 4 
-        # Si es cajón superpuesto (tapa los laterales), el cálculo cambia, pero asumimos sistema encajonado estándar o ajustado.
-        # Para simplificar en esta etapa: Frente cubre hueco - luces.
-        
+        # Agregar piezas de cajón
         piezas.append({
-            "Pieza": "Frente Cajón", 
-            "Cant": cant_cajones_total, 
-            "Largo": ancho_frente_real, 
-            "Ancho": alto_frente, 
-            "Veta": veta_frentes, 
-            "Mat": f"Melamina {espesor}"
-        })
-        
-        # Laterales de Cajón
-        piezas.append({
-            "Pieza": "Lat. Cajón", 
-            "Cant": cant_cajones_total * 2, 
-            "Largo": 500, # Profundidad estándar de corredera
-            "Ancho": altura_lateral_sugerida, 
-            "Veta": "↔️ Horizontal", 
-            "Mat": "Blanca 18mm"
-        })
-        
-        # Contra-frente y Fondo de cajón
-        ancho_contrafrente = ancho_hueco - 90 # 18+18 laterales + 13+13 correderas + margen = aprox 90
-        piezas.append({
-            "Pieza": "Contra-Frente", 
-            "Cant": cant_cajones_total, 
-            "Largo": ancho_contrafrente, 
-            "Ancho": altura_lateral_sugerida, 
-            "Veta": "↔️ Horizontal", 
-            "Mat": "Blanca 18mm"
+            "Pieza": "Frente Cajón", "Cant": cant_cajones_total, 
+            "Largo": ancho_frente_real, "Ancho": alto_frente, 
+            "Veta": veta_frentes, "Mat": f"Melamina {espesor}"
         })
         
         piezas.append({
-            "Pieza": "Fondo Cajón", 
-            "Cant": cant_cajones_total, 
-            "Largo": 500, 
-            "Ancho": ancho_contrafrente, 
-            "Veta": "Indistinto", 
-            "Mat": "Fibro 3mm"
+            "Pieza": "Lat. Cajón", "Cant": cant_cajones_total * 2, 
+            "Largo": 500, "Ancho": altura_final_lat, 
+            "Veta": "↔️ Horizontal", "Mat": "Blanca 18mm"
         })
+        
+        ancho_contrafrente = ancho_hueco - 90 
+        piezas.append({
+            "Pieza": "Contra-Frente", "Cant": cant_cajones_total, 
+            "Largo": ancho_contrafrente, "Ancho": altura_final_lat, 
+            "Veta": "↔️ Horizontal", "Mat": "Blanca 18mm"
+        })
+        
+        piezas.append({
+            "Pieza": "Fondo Cajón", "Cant": cant_cajones_total, 
+            "Largo": 500, "Ancho": ancho_contrafrente, 
+            "Veta": "Indistinto", "Mat": "Fibro 3mm"
+        })
+        
+        st.success(f"✅ Cálculo Base: Frente de **{alto_frente:.1f} mm** -> Lateral seleccionado de **{altura_final_lat} mm**.")
 
-    # --- MOSTRAR RESULTADOS ---
-    st.write("### 📋 Listado de Corte Optimizado")
-    
-    if alertas:
-        for a in alertas:
-            st.error(a)
-            
+    # --- MOSTRAR ---
+    st.write("### 📋 Listado de Corte Final")
     df = pd.DataFrame(piezas)
-    # Formatear números para que no muestren decimales feos
     st.dataframe(df.style.format({"Largo": "{:.1f}", "Ancho": "{:.1f}"}), use_container_width=True)
-    
-    col_info1, col_info2 = st.columns(2)
-    with col_info1:
-        st.success(f"**Ancho libre por columna:** {ancho_hueco:.1f} mm")
-    with col_info2:
-        if cant_cajones_total > 0:
-            st.success(f"**Alto de Frente calculado:** {alto_frente:.1f} mm")
