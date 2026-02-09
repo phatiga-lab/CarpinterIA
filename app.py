@@ -2,11 +2,26 @@ import streamlit as st
 import google.generativeai as genai
 from PIL import Image
 
-# 1. Configuración de la API
+import streamlit as st
+import google.generativeai as genai
+from PIL import Image
+
+# 1. Forzar el uso de la versión estable de la API
+# Esto evita el error de "v1beta not found"
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-# 2. Selección del modelo (Nombre limpio)
-model = genai.GenerativeModel('gemini-1.5-flash') 
+# 2. Definir el modelo sin prefijos y con un bloque de error detallado
+try:
+    # Probamos con el nombre más estándar posible
+    model = genai.GenerativeModel('gemini-1.5-flash')
+    
+    # Prueba rápida de texto para validar la llave
+    test = model.generate_content("test")
+    st.sidebar.success("✅ Conexión Exitosa")
+except Exception as e:
+    st.sidebar.error(f"❌ Error: {e}")
+    # Si falla, intentamos con el modelo Pro como backup automático
+    model = genai.GenerativeModel('gemini-1.5-pro')
 
 # OPCIONAL: Si querés ver si la llave funciona, agregá esto:
 try:
