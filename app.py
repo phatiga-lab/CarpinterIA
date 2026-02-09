@@ -1,120 +1,87 @@
 import streamlit as st
-import google.generativeai as genai
-from PIL import Image
-import json
 import pandas as pd
-import time
+from PIL import Image
+import google.generativeai as genai
 
-# 1. Configuración de página
-st.set_page_config(page_title="CarpinterIA Taller", page_icon="🪚")
-st.title("🪚 CarpinterIA: Taller Digital")
+# Configuración visual
+st.set_page_config(page_title="CarpinterIA: Calculadora", page_icon="🪚")
+st.title("🪚 CarpinterIA: Calculadora de Corte")
 
-# 2. Configuración API
-try:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-except:
-    st.error("⚠️ Falta configurar la API Key.")
-
-# 3. Inicializar Memoria
-if 'medidas' not in st.session_state:
-    st.session_state['medidas'] = {
-        "ancho": 900, "alto": 750, "prof": 450, "cajones": 0, "nombre": "Mueble Nuevo"
-    }
-
-# --- BARRA LATERAL ---
+# --- 1. CONFIGURACIÓN LATERAL (SIEMPRE VISIBLE) ---
 with st.sidebar:
     st.header("⚙️ Materiales")
-    espesor = st.selectbox("Placa Estructura", [18, 15, 25], index=0)
-    fondo = st.selectbox("Placa Fondo", [3, 5.5, 18], index=1)
+    espesor = st.selectbox("Espesor Placa (mm)", [18, 15, 25], index=0)
+    fondo = st.selectbox("Espesor Fondo (mm)", [3, 5.5, 18], index=1)
     zocalo = st.number_input("Altura Zócalo (mm)", value=70)
+    
+    st.divider()
+    st.caption("Estado del Sistema:")
+    # Intento silencioso de conexión (no rompe la app si falla)
+    api_status = "🔴 Desconectado"
+    try:
+        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        api_status = "🟢 API Key Detectada"
+    except:
+        api_status = "🔴 Falta API Key"
+    st.text(api_status)
 
-# --- FUNCIÓN: FUERZA BRUTA INTELIGENTE ---
-def intentar_analisis_robusto(imagen):
-    # Lista de todos los nombres posibles para cuentas gratuitas
-    # El código probará uno por uno hasta que uno funcione
-    modelos_posibles = [
-        "gemini-1.5-flash",
-        "gemini-1.5-flash-001",
-        "gemini-1.5-flash-002",
-        "gemini-1.5-flash-latest",
-        "gemini-1.5-pro",
-        "gemini-1.5-pro-001",
-        "gemini-pro-vision" # El clásico, si todo lo nuevo falla
-    ]
-    
-    prompt = """
-    Analiza este mueble. Estima Ancho, Alto, Profundidad en mm y cuenta cajones.
-    Devuelve SOLO JSON: {"ancho": 0, "alto": 0, "prof": 0, "cajones": 0, "nombre": "texto"}
-    """
-    
-    barra = st.progress(0)
-    estado = st.empty()
-    
-    for i, nombre_modelo in enumerate(modelos_posibles):
-        try:
-            estado.text(f"Intentando con motor: {nombre_modelo}...")
-            barra.progress((i + 1) / len(modelos_posibles))
-            
-            # Configuramos el modelo actual del bucle
-            model = genai.GenerativeModel(nombre_modelo)
-            
-            # Intentamos generar
-            response = model.generate_content([prompt, imagen])
-            
-            # Si llegamos acá, funcionó! Limpiamos y devolvemos
-            texto_limpio = response.text.replace("```json", "").replace("```", "")
-            estado.empty()
-            barra.empty()
-            st.success(f"✅ Conectado con éxito usando: {nombre_modelo}")
-            return json.loads(texto_limpio)
-            
-        except Exception as e:
-            # Si falla, seguimos al siguiente sin molestar al usuario
-            time.sleep(0.5)
-            continue
-            
-    estado.error("❌ Todos los modelos fallaron. Revisá tu API Key o intentá más tarde.")
-    return None
+# --- 2. ZONA DE IA (OPCIONAL Y COLAPSABLE) ---
+with st.expander("📸 Cargar Croquis / Foto (Opcional)"):
+    archivo = st.file_uploader("Subí una imagen para intentar leer medidas", type=['jpg', 'png'])
+    if archivo:
+        img = Image.open(archivo)
+        st.image(img, width=200)
+        
+        if st.button("Tratar de leer medidas con IA"):
+            try:
+                # Intento con el modelo más básico y estable
+                model = genai.GenerativeModel('gemini-1.5-flash-latest')
+                response = model.generate_content(["Dime solo el ancho y alto estimado de este mueble en mm. Formato: Ancho: X, Alto: Y", img])
+                st.info(f"🤖 La IA sugiere: {response.text}")
+            except Exception as e:
+                st.warning(f"La IA no pudo leer la foto (Error de Google), pero podés cargar los datos abajo manualmente.\nDetalle: {e}")
 
-# --- INTERFAZ ---
-st.header("1. Referencia Visual")
-archivo = st.file_uploader("Subí tu diseño aquí", type=['jpg', 'jpeg', 'png'])
+# --- 3. ZONA DE TRABAJO (LO IMPORTANTE) ---
+st.subheader("📐 Definición de Medidas")
+st.write("Ingresá las medidas finales del mueble para generar el corte.")
 
-if archivo:
-    img = Image.open(archivo)
-    st.image(img, width=300)
-    
-    if st.button("🔍 Analizar Medidas"):
-        with st.spinner("Buscando el mejor modelo disponible..."):
-            datos = intentar_analisis_robusto(img)
-            
-            if datos:
-                st.session_state['medidas'].update(datos)
-                st.rerun()
+col1, col2 = st.columns(2)
+
+with col1:
+    # Usamos session_state para que no se borren los números
+    ancho = st.number_input("Ancho Final (mm)", value=900, step=10)
+    alto = st.number_input("Alto Final (mm)", value=750, step=10)
+
+with col2:
+    prof = st.number_input("Profundidad (mm)", value=450, step=10)
+    cajones = st.number_input("Cantidad de Cajones", value=0, step=1)
 
 st.markdown("---")
 
-# --- EDICIÓN Y CÁLCULO ---
-st.header("2. Definición (Editable)")
-c1, c2 = st.columns(2)
-with c1:
-    ancho_f = st.number_input("Ancho (mm)", value=int(st.session_state['medidas']['ancho']))
-    alto_f = st.number_input("Alto (mm)", value=int(st.session_state['medidas']['alto']))
-with c2:
-    prof_f = st.number_input("Prof. (mm)", value=int(st.session_state['medidas']['prof']))
-    cajones = st.number_input("Cajones", value=int(st.session_state['medidas']['cajones']))
-
-if st.button("🚀 CALCULAR DESPIECE FINAL", type="primary"):
-    st.write(f"### 📋 Corte para: {st.session_state['medidas']['nombre']}")
+# --- 4. BOTÓN DE CÁLCULO (GARANTIZADO) ---
+if st.button("🚀 CALCULAR DESPIECE AHORA", type="primary", use_container_width=True):
     
-    # Lógica simple de corte
+    # Lógica de Carpintería
+    alto_lateral = alto
+    ancho_piso = ancho - (espesor * 2)
+    
+    # Lista de Piezas
     piezas = [
-        {"Pieza": "Lateral", "Cant": 2, "Largo": alto_f, "Ancho": prof_f, "Mat": f"Melamina {espesor}"},
-        {"Pieza": "Techo/Piso", "Cant": 2, "Largo": ancho_f - (espesor*2), "Ancho": prof_f, "Mat": f"Melamina {espesor}"},
-        {"Pieza": "Fondo", "Cant": 1, "Largo": alto_f-15, "Ancho": ancho_f-15, "Mat": f"Fibro {fondo}"}
+        {"Pieza": "Lateral", "Cant": 2, "Medidas": f"{alto_lateral} x {prof} mm", "Material": f"Melamina {espesor}"},
+        {"Pieza": "Techo/Piso", "Cant": 2, "Medidas": f"{ancho_piso} x {prof} mm", "Material": f"Melamina {espesor}"},
+        {"Pieza": "Fondo", "Cant": 1, "Medidas": f"{alto-15} x {ancho-15} mm", "Material": f"Fibro {fondo}"}
     ]
+    
+    # Lógica de Cajones
     if cajones > 0:
-        alto_frente = (alto_f - zocalo - 30) / cajones
-        piezas.append({"Pieza": "Frente Cajón", "Cant": cajones, "Largo": ancho_f-4, "Ancho": int(alto_frente), "Mat": f"Melamina {espesor}"})
-        
-    st.dataframe(pd.DataFrame(piezas), use_container_width=True)
+        alto_frente = (alto - zocalo - 30) / cajones
+        piezas.append({"Pieza": "Frente Cajón", "Cant": cajones, "Medidas": f"{int(alto_frente)} x {ancho-4} mm", "Material": f"Melamina {espesor}"})
+        # Laterales de cajón (estándar)
+        piezas.append({"Pieza": "Lat. Cajón", "Cant": cajones*2, "Medidas": f"500 x 150 mm", "Material": "Melamina Blanca"})
+
+    # Mostrar Resultados
+    st.success("✅ Despiece Generado Exitosamente")
+    df = pd.DataFrame(piezas)
+    st.dataframe(df, use_container_width=True)
+    
+    st.caption("Nota: Las medidas de cajones son sugeridas. Verificar luz de correderas.")
