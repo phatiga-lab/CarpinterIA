@@ -39,12 +39,12 @@ if archivo:
     img = Image.open(archivo)
     st.image(img, width=300)
     
-    # Botón para llamar a la IA
+# Botón para llamar a la IA
     if st.button("🔍 Analizar Medidas con IA"):
-        with st.spinner("Consultando a Gemini 2.0..."):
+        with st.spinner("Consultando a Gemini 1.5..."):
             try:
-                # Usamos el modelo que sabemos que funciona
-                model = genai.GenerativeModel('gemini-2.0-flash')
+                # CAMBIO CLAVE: Usamos la versión 1.5 Flash (Estándar y Gratuita)
+                model = genai.GenerativeModel('gemini-1.5-flash')
                 
                 prompt = """
                 Analiza este mueble para despiece.
@@ -60,10 +60,11 @@ if archivo:
                 # Guardamos en memoria
                 st.session_state['medidas'].update(datos)
                 st.success("¡Medidas detectadas! Podés corregirlas abajo.")
-                st.rerun() # Recarga la página para mostrar los números nuevos
+                st.rerun() 
                 
             except Exception as e:
                 st.error(f"Error analizando: {e}")
+           
 
 st.markdown("---")
 
