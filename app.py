@@ -2,10 +2,13 @@ import streamlit as st
 import google.generativeai as genai
 from PIL import Image
 
-# Reemplaza la configuración de la API por esta
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"], transport='grpc')
-model = genai.GenerativeModel('models/gemini-1.5-flash')
-st.title("🪚 CarpinterIA: Prototipo V0.2")
+# 1. Configuración limpia
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+
+# Usamos el nombre más básico posible
+model = genai.GenerativeModel('gemini-pro-vision') 
+# Si el anterior falla, probá con 'gemini-1.5-flash' (sin el models/)
+st.title("🪚 CarpinterIA: Prototipo V0.20")
 
 # 2. Selector de archivo (Foto del mueble o croquis)
 archivo = st.file_uploader("Subí tu croquis o foto de referencia", type=['jpg', 'jpeg', 'png'])
