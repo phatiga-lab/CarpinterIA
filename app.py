@@ -2,22 +2,25 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 
-st.set_page_config(page_title="CarpinterIA: Architect", page_icon="📐", layout="wide")
-st.title("📐 CarpinterIA: Diseñador de Interiores (V9)")
+st.set_page_config(page_title="CarpinterIA: Master Suite", page_icon="🪚", layout="wide")
+st.title("🪚 CarpinterIA: Diseñador y Calculista (V10)")
 
 # --- 1. CONFIGURACIÓN LATERAL ---
 with st.sidebar:
     st.header("⚙️ Materiales")
-    espesor = st.selectbox("Espesor Placa", [18, 15], index=0)
-    zocalo = st.number_input("Altura Zócalo", value=70)
+    espesor = st.selectbox("Espesor Estructura", [18, 15], index=0)
+    fondo_esp = st.selectbox("Espesor Fondo", [3, 5.5, 18], index=0)
+    zocalo = st.number_input("Altura Zócalo (mm)", value=70)
+    
     st.divider()
-    st.info("💡 Ahora podés configurar cada columna por separado.")
+    st.header("🎨 Terminación")
+    veta_frentes = st.radio("Veta Visual", ["↔️ Horizontal", "↕️ Vertical"], index=0)
 
-# --- 2. DEFINICIÓN GLOBAL ---
+# --- 2. MEDIDAS GLOBALES ---
 col_dims, col_config = st.columns([1, 2])
 
 with col_dims:
-    st.subheader("1. Medidas Exteriores")
+    st.subheader("1. Medidas del Casco")
     ancho = st.number_input("Ancho Total (mm)", 500, 3000, 1200, step=50)
     alto = st.number_input("Alto Total (mm)", 1000, 2600, 2000, step=50)
     prof = st.number_input("Profundidad (mm)", 300, 900, 550, step=50)
@@ -26,13 +29,10 @@ with col_dims:
     cant_columnas = st.slider("Cantidad de Columnas", 1, 4, 2)
 
 # --- 3. CONFIGURACIÓN DETALLADA POR COLUMNA ---
-# Creamos una lista para guardar la config de cada columna
 configuracion_columnas = []
 
 with col_config:
-    st.subheader("3. Diseño por Columna")
-    
-    # Creamos pestañas para cada columna para que sea prolijo
+    st.subheader("3. Diseño Interior")
     tabs = st.tabs([f"Columna {i+1}" for i in range(cant_columnas)])
     
     for i, tab in enumerate(tabs):
@@ -41,199 +41,216 @@ with col_config:
             
             # --- SECTOR INFERIOR ---
             with c1:
-                st.write("🔽 **Sector Inferior**")
-                tipo_inf = st.selectbox(f"Componente Abajo (Col {i+1})", 
+                st.write("🔽 **Abajo**")
+                tipo_inf = st.selectbox(f"Componente Inf (Col {i+1})", 
                                        ["Vacío", "Cajonera", "Puerta Baja", "Puerta Entera"], 
                                        key=f"inf_{i}")
                 
                 detalles_inf = {}
                 if tipo_inf == "Cajonera":
-                    altura_cajonera = st.slider(f"Altura Total Cajonera (mm)", 300, 1200, 700, key=f"h_caj_{i}", help="Espacio total que ocuparán los cajones")
-                    cant_cajones = st.slider(f"Cantidad Cajones", 2, 8, 3, key=f"qty_caj_{i}")
-                    detalles_inf = {"alto": altura_cajonera, "cant": cant_cajones}
+                    # Dinamismo: El usuario decide cuánto espacio ocupan los cajones
+                    altura_cajonera = st.slider(f"Altura del Módulo (mm)", 300, 1200, 720, key=f"h_caj_{i}")
+                    cant_cajones = st.slider(f"Cant. Cajones", 2, 8, 3, key=f"qty_caj_{i}")
                     
-                    # Cálculo dinámico visual
-                    alto_unitario = altura_cajonera / cant_cajones
-                    st.caption(f"Cada cajón tendrá {alto_unitario:.0f}mm de frente.")
+                    # Cálculo previo para mostrar info
+                    alto_frente = (altura_cajonera / cant_cajones)
+                    st.caption(f"Frentes de aprox {alto_frente:.0f}mm")
+                    
+                    detalles_inf = {"alto": altura_cajonera, "cant": cant_cajones}
                 
                 elif tipo_inf == "Puerta Baja":
-                    altura_puerta = st.slider(f"Altura Puerta (mm)", 300, 1200, 700, key=f"h_p_inf_{i}")
+                    altura_puerta = st.slider(f"Altura Puerta (mm)", 300, 1200, 720, key=f"h_p_inf_{i}")
                     detalles_inf = {"alto": altura_puerta}
 
             # --- SECTOR SUPERIOR ---
             with c2:
-                st.write("🔼 **Sector Superior**")
-                # Si hay puerta entera, no hay sector superior
+                st.write("🔼 **Arriba**")
                 if tipo_inf == "Puerta Entera":
-                    st.info("La puerta ocupa toda la columna.")
+                    st.info("Ocupado por puerta entera.")
                     tipo_sup = "Nada"
                     detalles_sup = {}
                 else:
-                    tipo_sup = st.selectbox(f"Componente Arriba (Col {i+1})", 
-                                           ["Estantes", "Barral de Colgar", "Espacio Libre", "Puerta Alta"], 
+                    tipo_sup = st.selectbox(f"Componente Sup (Col {i+1})", 
+                                           ["Estantes", "Barral", "Espacio Libre", "Puerta Alta"], 
                                            key=f"sup_{i}")
                     
                     detalles_sup = {}
                     if tipo_sup == "Estantes":
-                        cant_estantes = st.slider(f"Cantidad Estantes", 1, 10, 3, key=f"qty_est_{i}")
+                        cant_estantes = st.slider(f"Cant. Estantes", 1, 8, 3, key=f"qty_est_{i}")
                         detalles_sup = {"cant": cant_estantes}
-                    
-                    elif tipo_sup == "Puerta Alta":
-                        st.caption("Ocupa el espacio restante hasta el techo.")
 
-            # Guardamos la config de esta columna
+            # Guardamos config
             configuracion_columnas.append({
                 "inf_tipo": tipo_inf, "inf_data": detalles_inf,
                 "sup_tipo": tipo_sup, "sup_data": detalles_sup
             })
 
 # --- 4. MOTOR GRÁFICO (PLOTLY) ---
-def generar_grafico(ancho, alto, zocalo, columnas, configs):
+def generar_grafico_v10(ancho, alto, zocalo, columnas, configs):
     fig = go.Figure()
-    
-    # Lienzo
     fig.update_layout(
-        title="Vista Previa Dinámica",
-        xaxis=dict(range=[-50, ancho+50], showgrid=False, visible=False),
-        yaxis=dict(range=[-50, alto+50], showgrid=False, visible=False, scaleanchor="x", scaleratio=1),
-        plot_bgcolor="white", height=600, margin=dict(t=30, b=0, l=0, r=0)
+        margin=dict(t=30, b=0, l=0, r=0), 
+        height=400,
+        xaxis=dict(showgrid=False, visible=False, range=[-50, ancho+50]),
+        yaxis=dict(showgrid=False, visible=False, scaleanchor="x", scaleratio=1, range=[-50, alto+50]),
+        plot_bgcolor="white"
     )
 
-    # Zócalo y Estructura
-    fig.add_shape(type="rect", x0=0, y0=0, x1=ancho, y1=zocalo, fillcolor="#2c3e50", line=dict(color="black"))
+    # Estructura
+    fig.add_shape(type="rect", x0=0, y0=0, x1=ancho, y1=zocalo, fillcolor="#34495E", line=dict(color="black")) # Zocalo
     fig.add_shape(type="rect", x0=0, y0=zocalo, x1=ancho, y1=alto, line=dict(color="#5D4037", width=4)) # Marco
 
-    # Ancho de cada columna
     ancho_col = ancho / columnas
     
-    # DIBUJAR CONTENIDO POR COLUMNA
     for i, conf in enumerate(configs):
         x_start = i * ancho_col
         x_end = (i + 1) * ancho_col
-        y_cursor = zocalo # Cursor que sube desde el zócalo
+        y_cursor = zocalo
         
-        # Divisor vertical (si no es la ultima)
+        # Divisor
         if i < columnas:
              fig.add_shape(type="line", x0=x_end, y0=zocalo, x1=x_end, y1=alto, line=dict(color="#5D4037", width=2))
 
-        # --- PARTE INFERIOR ---
+        # Inferior
         tipo = conf["inf_tipo"]
         data = conf["inf_data"]
         
         if tipo == "Cajonera":
-            alto_total = data["alto"]
+            h_total = data["alto"]
             cant = data["cant"]
-            alto_cajon = alto_total / cant
-            
+            h_cajon = h_total / cant
             for c in range(cant):
-                y_cajon = y_cursor + (c * alto_cajon)
-                fig.add_shape(type="rect", 
-                    x0=x_start+4, y0=y_cajon+2, x1=x_end-4, y1=y_cajon+alto_cajon-2, 
-                    fillcolor="#AED6F1", line=dict(color="#2874A6", width=2))
-                # Manija
-                fig.add_shape(type="line", x0=x_start+(ancho_col/2)-30, y0=y_cajon+(alto_cajon/2), x1=x_start+(ancho_col/2)+30, y1=y_cajon+(alto_cajon/2), line=dict(color="#2874A6", width=3))
-            
-            y_cursor += alto_total # Subimos el cursor
+                y_c = y_cursor + (c * h_cajon)
+                fig.add_shape(type="rect", x0=x_start+4, y0=y_c+2, x1=x_end-4, y1=y_c+h_cajon-2, fillcolor="#85C1E9", line=dict(color="#2E86C1"))
+                fig.add_shape(type="line", x0=x_start+20, y0=y_c+(h_cajon/2), x1=x_end-20, y1=y_c+(h_cajon/2), line=dict(color="#154360", width=2))
+            y_cursor += h_total
 
         elif tipo == "Puerta Baja":
-            alto_p = data["alto"]
-            fig.add_shape(type="rect", 
-                x0=x_start+4, y0=y_cursor+2, x1=x_end-4, y1=y_cursor+alto_p-2, 
-                fillcolor="#ABEBC6", line=dict(color="#1D8348", width=2))
-            # Picaporte (derecha o izquierda según columna)
-            pos_x_pica = x_end - 20 if i % 2 == 0 else x_start + 20
-            fig.add_shape(type="circle", x0=pos_x_pica-5, y0=y_cursor+(alto_p/2), x1=pos_x_pica+5, y1=y_cursor+(alto_p/2)+10, fillcolor="black")
-            
-            y_cursor += alto_p
+            h_p = data["alto"]
+            fig.add_shape(type="rect", x0=x_start+4, y0=y_cursor+2, x1=x_end-4, y1=y_cursor+h_p-2, fillcolor="#ABEBC6", line=dict(color="#196F3D"))
+            y_cursor += h_p
 
         elif tipo == "Puerta Entera":
-            alto_p = alto - zocalo
-            fig.add_shape(type="rect", 
-                x0=x_start+4, y0=y_cursor+2, x1=x_end-4, y1=alto-2, 
-                fillcolor="#D7BDE2", line=dict(color="#884EA0", width=2))
-            pos_x_pica = x_end - 20 if i % 2 == 0 else x_start + 20
-            fig.add_shape(type="circle", x0=pos_x_pica-5, y0=zocalo+900, x1=pos_x_pica+5, y1=zocalo+910, fillcolor="black")
-            y_cursor = alto # Ocupa todo
+            fig.add_shape(type="rect", x0=x_start+4, y0=y_cursor+2, x1=x_end-4, y1=alto-2, fillcolor="#D2B4DE", line=dict(color="#6C3483"))
+            y_cursor = alto
 
-        # --- PARTE SUPERIOR ---
-        # El espacio restante es Alto Total - Donde quedó el cursor
-        espacio_restante = alto - y_cursor
-        
-        if espacio_restante > 0:
+        # Superior
+        restante = alto - y_cursor
+        if restante > 0:
             tipo_sup = conf["sup_tipo"]
             data_sup = conf["sup_data"]
             
             if tipo_sup == "Estantes":
                 cant = data_sup["cant"]
-                # Distribuimos los estantes en el espacio restante
-                # Espacio entre estantes = Espacio / (cant + 1)
-                paso = espacio_restante / (cant + 1)
-                
+                paso = restante / (cant + 1)
                 for e in range(cant):
-                    y_est = y_cursor + (paso * (e + 1))
-                    fig.add_shape(type="line", x0=x_start, y0=y_est, x1=x_end, y1=y_est, line=dict(color="#5D4037", width=3))
+                    y_e = y_cursor + (paso * (e+1))
+                    fig.add_shape(type="line", x0=x_start+2, y0=y_e, x1=x_end-2, y1=y_e, line=dict(color="#6E2C00", width=2))
             
-            elif tipo_sup == "Barral de Colgar":
-                y_barral = alto - 100 # 10cm desde el techo
-                fig.add_shape(type="line", x0=x_start+10, y0=y_barral, x1=x_end-10, y1=y_barral, line=dict(color="gray", width=5))
-                # Dibujo de percha esquemática
-                fig.add_annotation(x=x_start+(ancho_col/2), y=y_barral-50, text="👕", showarrow=False, font=dict(size=20))
-
-            elif tipo_sup == "Puerta Alta":
-                 fig.add_shape(type="rect", 
-                    x0=x_start+4, y0=y_cursor+2, x1=x_end-4, y1=alto-2, 
-                    fillcolor="#F9E79F", line=dict(color="#D4AC0D", width=2))
-                 pos_x_pica = x_end - 20 if i % 2 == 0 else x_start + 20
-                 fig.add_shape(type="circle", x0=pos_x_pica-5, y0=y_cursor+100, x1=pos_x_pica+5, y1=y_cursor+110, fillcolor="black")
+            elif tipo_sup == "Barral":
+                y_b = alto - 100
+                fig.add_shape(type="line", x0=x_start+10, y0=y_b, x1=x_end-10, y1=y_b, line=dict(color="gray", width=4))
+                fig.add_annotation(x=x_start+(ancho_col/2), y=y_b-30, text="👕", showarrow=False)
 
     return fig
 
-# --- 5. RENDERIZADO DEL GRÁFICO ---
-st.markdown("---")
-figura = generar_grafico(ancho, alto, zocalo, cant_columnas, configuracion_columnas)
-st.plotly_chart(figura, use_container_width=True)
+st.plotly_chart(generar_grafico_v10(ancho, alto, zocalo, cant_columnas, configuracion_columnas), use_container_width=True)
 
-# --- 6. CÁLCULO DE CORTE BASADO EN EL DISEÑO ---
-if st.button("🚀 GENERAR LISTA DE CORTE DE ESTE DISEÑO", type="primary"):
-    piezas = []
+# --- 5. LÓGICA DE INGENIERÍA (CÁLCULO REAL) ---
+if st.button("🚀 CALCULAR DESPIECE Y HERRAJES", type="primary"):
     
-    # Estructura Base
-    piezas.append({"Pieza": "Lat. Externo", "Cant": 2, "Medidas": f"{alto}x{prof}", "Mat": "Melamina"})
-    piezas.append({"Pieza": "Techo/Piso", "Cant": 2, "Medidas": f"{ancho-(espesor*2)}x{prof}", "Mat": "Melamina"})
-    piezas.append({"Pieza": "Fondo", "Cant": 1, "Medidas": f"{alto-15}x{ancho-15}", "Mat": "Fibro"})
+    piezas = []
+    compras = []
+    
+    # A. Estructura Base
+    alto_int = alto - zocalo - (espesor * 2) # Altura interna util total
+    ancho_int_total = ancho - (espesor * 2)
+    
+    piezas.append({"Pieza": "Lateral Externo", "Cant": 2, "Largo": alto, "Ancho": prof, "Veta": "↕️ Vert", "Mat": f"Melamina {espesor}"})
+    piezas.append({"Pieza": "Techo/Piso", "Cant": 2, "Largo": ancho_int_total, "Ancho": prof, "Veta": "↔️ Horiz", "Mat": f"Melamina {espesor}"})
+    piezas.append({"Pieza": "Fondo Estructural", "Cant": 1, "Largo": alto-15, "Ancho": ancho-15, "Veta": "---", "Mat": f"Fibro {fondo_esp}"})
     
     # Divisores
     if cant_columnas > 1:
-        alto_interior = alto - zocalo - (espesor*2)
-        piezas.append({"Pieza": "Divisor Vertical", "Cant": cant_columnas-1, "Medidas": f"{alto_interior}x{prof}", "Mat": "Melamina"})
-    
-    # Iterar configuraciones para sumar piezas
-    ancho_col = (ancho - (espesor * (cant_columnas + 1))) / cant_columnas # Calculo preciso de luz
-    
+        piezas.append({"Pieza": "Divisor Vertical", "Cant": cant_columnas-1, "Largo": alto_int, "Ancho": prof, "Veta": "↕️ Vert", "Mat": f"Melamina {espesor}"})
+
+    # Calculo ancho exacto de cada columna (hueco)
+    # Ancho total - (laterales + divisores) / cantidad
+    descuento_espesores = (espesor * 2) + ((cant_columnas - 1) * espesor)
+    ancho_hueco = (ancho - descuento_espesores) / cant_columnas
+
+    # B. Procesar Componentes
     for conf in configuracion_columnas:
-        # Cajones
+        
+        # --- CAJONES (DETALLADO) ---
         if conf["inf_tipo"] == "Cajonera":
             cant = conf["inf_data"]["cant"]
-            h_total = conf["inf_data"]["alto"]
-            h_frente = (h_total / cant) - 3 # Descuento luz
+            h_modulo = conf["inf_data"]["alto"]
             
-            piezas.append({"Pieza": "Frente Cajón", "Cant": cant, "Medidas": f"{int(ancho_col-4)}x{int(h_frente)}", "Mat": "Melamina"})
-            piezas.append({"Pieza": "Caja Cajón", "Cant": cant, "Medidas": "Kit Estándar", "Mat": "Blanca"})
+            # Cálculo de frentes
+            luz = 3
+            alto_frente = (h_modulo / cant) - luz
+            
+            # Partes
+            piezas.append({"Pieza": "Frente Cajón", "Cant": cant, "Largo": ancho_hueco-4, "Ancho": alto_frente, "Veta": veta_frentes, "Mat": f"Melamina {espesor}"})
+            
+            # Estructura interna (Caja)
+            lateral_h = 150 # Estándar, o podríamos calcularlo
+            if alto_frente < 160: lateral_h = 100 # Si es muy bajo el frente
+            
+            piezas.append({"Pieza": "Lat. Cajón", "Cant": cant*2, "Largo": 500, "Ancho": lateral_h, "Veta": "↔️ Horiz", "Mat": "Blanca 18mm"})
+            piezas.append({"Pieza": "Contra-Frente", "Cant": cant, "Largo": ancho_hueco-90, "Ancho": lateral_h, "Veta": "↔️ Horiz", "Mat": "Blanca 18mm"})
+            piezas.append({"Pieza": "Fondo Cajón", "Cant": cant, "Largo": 500, "Ancho": ancho_hueco-90, "Veta": "---", "Mat": "Fibro 3mm"})
+            
+            # Herrajes Cajón
+            compras.append({"Item": "Correderas 500mm", "Cant": cant, "Unidad": "pares", "Nota": "Z o Telescópicas"})
+            compras.append({"Item": "Tornillos 3.5x16", "Cant": cant*12, "Unidad": "u.", "Nota": "Fijación guías"})
         
-        # Estantes
+        # --- PUERTAS ---
+        # Función auxiliar para calcular bisagras
+        def calc_bisagras(h):
+            if h < 900: return 2
+            if h < 1600: return 3
+            if h < 2100: return 4
+            return 5
+
+        if conf["inf_tipo"] == "Puerta Baja":
+            h_p = conf["inf_data"]["alto"]
+            piezas.append({"Pieza": "Puerta Baja", "Cant": 1, "Largo": h_p-4, "Ancho": ancho_hueco-4, "Veta": veta_frentes, "Mat": f"Melamina {espesor}"})
+            compras.append({"Item": "Bisagras 35mm", "Cant": calc_bisagras(h_p), "Unidad": "u.", "Nota": "Codo 0 o 9/18 según posición"})
+
+        if conf["inf_tipo"] == "Puerta Entera":
+            h_p = alto - zocalo
+            piezas.append({"Pieza": "Puerta Entera", "Cant": 1, "Largo": h_p-4, "Ancho": ancho_hueco-4, "Veta": veta_frentes, "Mat": f"Melamina {espesor}"})
+            compras.append({"Item": "Bisagras 35mm", "Cant": calc_bisagras(h_p), "Unidad": "u.", "Nota": ""})
+
+        # --- ESTANTES ---
         if conf["sup_tipo"] == "Estantes":
             cant = conf["sup_data"]["cant"]
-            piezas.append({"Pieza": "Estante", "Cant": cant, "Medidas": f"{int(ancho_col-2)}x{prof-20}", "Mat": "Melamina"})
-            
-        # Puertas
-        if conf["inf_tipo"] == "Puerta Baja":
-             piezas.append({"Pieza": "Puerta Baja", "Cant": 1, "Medidas": f"{int(ancho_col-4)}x{conf['inf_data']['alto']}", "Mat": "Melamina"})
-        if conf["inf_tipo"] == "Puerta Entera":
-             piezas.append({"Pieza": "Puerta Entera", "Cant": 1, "Medidas": f"{int(ancho_col-4)}x{alto-zocalo-4}", "Mat": "Melamina"})
-        if conf["sup_tipo"] == "Puerta Alta":
-             # Hay que calcular la altura restante
-             h_restante = alto - zocalo - conf["inf_data"].get("alto", 0)
-             piezas.append({"Pieza": "Puerta Alta", "Cant": 1, "Medidas": f"{int(ancho_col-4)}x{int(h_restante-4)}", "Mat": "Melamina"})
+            piezas.append({"Pieza": "Estante Móvil", "Cant": cant, "Largo": ancho_hueco-2, "Ancho": prof-20, "Veta": "↔️ Horiz", "Mat": f"Melamina {espesor}"})
+            compras.append({"Item": "Soportes Estante", "Cant": cant*4, "Unidad": "u.", "Nota": "Metal o Plástico"})
 
-    st.write("### 📋 Listado Preliminar")
-    st.dataframe(pd.DataFrame(piezas), use_container_width=True)
+        # --- BARRAL ---
+        if conf["sup_tipo"] == "Barral":
+            compras.append({"Item": "Barral Oval", "Cant": 1, "Unidad": "tira", "Nota": f"Cortar a {int(ancho_hueco-5)}mm"})
+            compras.append({"Item": "Soportes Barral", "Cant": 2, "Unidad": "u.", "Nota": ""})
+
+    # C. Insumos Generales
+    tornillos_4x50 = (len(piezas) * 4) # Estimado estructural
+    compras.insert(0, {"Item": "Tornillos 4x50", "Cant": tornillos_4x50, "Unidad": "u.", "Nota": "Estructura"})
+    
+    # Tapacantos
+    metros_lineales = sum([(p["Largo"]+p["Ancho"])*2*p["Cant"] for p in piezas if "Melamina" in p["Mat"]]) / 1000
+    compras.append({"Item": "Tapacanto PVC", "Cant": int(metros_lineales*1.2), "Unidad": "m", "Nota": "Incluye desp."})
+
+    # --- RESULTADOS ---
+    c_izq, c_der = st.columns([1.5, 1])
+    
+    with c_izq:
+        st.write("### 📋 Listado de Corte (Despiece)")
+        df_piezas = pd.DataFrame(piezas)
+        st.dataframe(df_piezas.style.format({"Largo": "{:.0f}", "Ancho": "{:.0f}"}), use_container_width=True, hide_index=True)
+        
+        # Descarga
+        csv = df_piezas.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Bajar CSV para Maderera", csv, "corte_v10.csv", "text/
