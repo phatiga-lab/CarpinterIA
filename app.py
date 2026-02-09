@@ -4,7 +4,7 @@ from PIL import Image
 
 # 1. Configuración de la IA usando el "Secret" que cargaste
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-1.5-flash-latest')
 
 st.title("🪚 CarpinterIA: Prototipo V0.1")
 
