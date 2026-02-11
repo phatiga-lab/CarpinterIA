@@ -4,16 +4,16 @@ import plotly.graph_objects as go
 import math
 
 # Configuración de página
-st.set_page_config(page_title="CarpinterIA: V14 Precisión", page_icon="🪚", layout="wide")
+st.set_page_config(page_title="CarpinterIA: V15 Flex", page_icon="🪚", layout="wide")
 
 # ==============================================================================
 # 1. BARRA LATERAL: CONFIGURACIÓN
 # ==============================================================================
 with st.sidebar:
-    st.title("🪚 CarpinterIA V14")
+    st.title("🪚 CarpinterIA V15")
     st.markdown("### ⚙️ Configuración")
     
-    # Materiales
+    # A. Materiales
     st.write("**1. Tableros**")
     espesor = st.selectbox("Espesor Melamina", [18, 15], index=0)
     fondo_esp = st.selectbox("Espesor Fondo", [3, 5.5, 18], index=0)
@@ -22,21 +22,25 @@ with st.sidebar:
 
     st.divider()
     
-    # Herrajes
+    # B. Herrajes
     st.write("**2. Herrajes**")
-    tipo_corredera = st.selectbox("Correderas", ["Telescópicas (Bolillas)", "Comunes (Z)"])
-    if "Telescópicas" in tipo_corredera:
+    tipo_corredera = st.selectbox("Correderas", ["Telescópicas", "Comunes (Z)", "Push / Tip-On"])
+    
+    # Lógica Push y Descuentos
+    es_push = "Push" in tipo_corredera
+    
+    if "Telescópicas" in tipo_corredera or "Push" in tipo_corredera:
         descuento_guia = 26 
         costo_guia_ref = 6500
-    else:
+    else: # Comunes Z
         descuento_guia = 25 
         costo_guia_ref = 2500
 
-    tipo_bisagra = st.selectbox("Bisagras", ["Codo 0 (Ext)", "Codo 9 (Media)", "Codo 18 (Int)"])
+    tipo_bisagra = st.selectbox("Bisagras", ["Codo 0 (Ext)", "Codo 9 (Media)", "Codo 18 (Int)", "Push (Sin resorte)"])
     
     st.divider()
     
-    # Costos
+    # C. Costos
     with st.expander("💲 Precios (Opcional)"):
         precio_placa = st.number_input("Precio Placa ($)", value=85000, step=1000)
         precio_fondo = st.number_input("Precio Fondo ($)", value=25000, step=1000)
@@ -46,7 +50,7 @@ with st.sidebar:
         margen = st.number_input("Margen Ganancia", value=2.5, step=0.1)
 
 # ==============================================================================
-# 2. LAYOUT (Estructura Visual)
+# 2. LAYOUT
 # ==============================================================================
 contenedor_grafico = st.container()
 st.divider()
@@ -55,7 +59,7 @@ st.divider()
 contenedor_boton = st.container()
 
 # ==============================================================================
-# 3. CONTROLES DE DISEÑO (INPUTS MANUALES)
+# 3. CONTROLES DE DISEÑO
 # ==============================================================================
 configuracion_columnas = []
 
@@ -64,12 +68,15 @@ with contenedor_controles:
     
     # --- Medidas Generales ---
     with col_medidas:
-        st.subheader("1. Medidas del Mueble")
+        st.subheader("1. Casco General")
         ancho = st.number_input("Ancho Total (mm)", value=1200, step=10)
         alto = st.number_input("Alto Total (mm)", value=2000, step=10)
         prof = st.number_input("Profundidad (mm)", value=550, step=10)
         st.markdown("---")
         cant_columnas = st.number_input("Cantidad de Columnas", min_value=1, max_value=5, value=2, step=1)
+        
+        if es_push:
+            st.success("✨ Modo Push Activo: Diseño sin manijas.")
 
     # --- Configuración por Columna ---
     with col_distribucion:
@@ -78,66 +85,109 @@ with contenedor_controles:
         
         for i, tab in enumerate(tabs):
             with tab:
-                c1, c2 = st.columns(2)
+                # SELECTOR DE MODO DE COLUMNA
+                modo_col = st.radio(f"Estructura Columna {i+1}", 
+                                   ["Dividida (Módulo Inf + Sup)", "Entera (Un solo módulo)"], 
+                                   horizontal=True, key=f"mode_{i}")
                 
-                # SECTOR INFERIOR
-                with c1:
-                    st.markdown("##### 🔽 Abajo")
-                    tipo_inf = st.selectbox("Componente", ["Vacío", "Cajonera", "Puerta Baja", "Puerta Entera"], key=f"inf_{i}")
+                detalles_inf = {}
+                detalles_sup = {}
+                tipo_inf = "Vacío"
+                tipo_sup = "Vacío"
+
+                # --- MODO ENTERO ---
+                if "Entera" in modo_col:
+                    st.info("La columna ocupa toda la altura disponible (menos zócalo).")
+                    tipo_inf = st.selectbox("Componente Único", ["Vacío", "Cajonera", "Puerta Entera", "Estantes", "Barral"], key=f"ent_{i}")
                     
-                    detalles_inf = {}
+                    # Altura automática (Alto total - Zocalo)
+                    h_util = alto - zocalo
                     
+                    # Configuración del componente único (se guarda como 'inf' para simplificar lógica)
                     if tipo_inf == "Cajonera":
-                        h_mod = st.number_input("Altura Módulo (mm)", value=720, step=10, key=f"h_caj_{i}")
-                        cant_caj = st.number_input("Cant. Cajones", value=3, step=1, min_value=1, key=f"qty_caj_{i}")
-                        detalles_inf = {"alto": h_mod, "cant": cant_caj}
-                        
-                        # Validación visual
-                        alto_frente = (h_mod - espesor) / cant_caj
-                        st.caption(f"Frentes aprox: {alto_frente:.1f}mm")
+                        cant_caj = st.number_input("Cant. Cajones", value=6, step=1, min_value=1, key=f"qty_ent_{i}")
+                        detalles_inf = {"alto": h_util, "cant": cant_caj}
+                        st.caption(f"Frentes aprox: {(h_util-espesor)/cant_caj:.1f}mm")
                     
-                    elif tipo_inf == "Puerta Baja":
-                        h_p = st.number_input("Altura Puerta (mm)", value=720, step=10, key=f"h_p_inf_{i}")
-                        doble = st.checkbox("¿Doble Hoja?", value=False, key=f"doble_inf_{i}")
-                        detalles_inf = {"alto": h_p, "doble": doble}
-                        
                     elif tipo_inf == "Puerta Entera":
                         doble = st.checkbox("¿Doble Hoja?", value=False, key=f"doble_ent_{i}")
-                        detalles_inf = {"doble": doble}
+                        detalles_inf = {"alto": h_util, "doble": doble}
+                    
+                    elif tipo_inf == "Estantes":
+                        cant_est = st.number_input("Cant. Estantes", value=5, step=1, key=f"est_ent_{i}")
+                        detalles_sup = {"cant": cant_est} # Guardamos en sup para reusar logica estantes
+                        # Hack: Si es estanteria entera, usamos tipo_sup para dibujar estantes
+                        tipo_sup = "Estantes" 
+                        tipo_inf = "Vacío" # Para que no dibuje nada abajo especifico
+                    
+                    elif tipo_inf == "Barral":
+                        # Hack similar
+                        tipo_sup = "Barral"
+                        tipo_inf = "Vacío"
 
-                # SECTOR SUPERIOR
-                with c2:
-                    st.markdown("##### 🔼 Arriba")
-                    if tipo_inf == "Puerta Entera":
-                        st.info("Ocupado por puerta entera.")
-                        tipo_sup = "Nada"
-                        detalles_sup = {}
-                    else:
-                        tipo_sup = st.selectbox("Componente", ["Vacío", "Estantes", "Barral", "Puerta Alta"], key=f"sup_{i}")
+                # --- MODO DIVIDIDO ---
+                else:
+                    c1, c2 = st.columns(2)
+                    
+                    # Módulo Inferior (Define la altura de corte)
+                    with c1:
+                        st.markdown("##### 🔽 Abajo")
+                        tipo_inf = st.selectbox("Componente", ["Vacío", "Cajonera", "Puerta Baja"], key=f"inf_{i}")
                         
-                        detalles_sup = {}
-                        if tipo_sup == "Estantes":
-                            cant_est = st.number_input("Cant. Estantes", value=3, step=1, min_value=1, key=f"qty_est_{i}")
-                            detalles_sup = {"cant": cant_est}
+                        # Altura MANUAL obligatoria
+                        h_mod = st.number_input("Altura Módulo (mm)", value=720, step=10, key=f"h_inf_man_{i}")
                         
-                        elif tipo_sup == "Puerta Alta":
-                             doble_sup = st.checkbox("¿Doble Hoja?", value=False, key=f"doble_sup_{i}")
-                             detalles_sup = {"doble": doble_sup}
+                        if tipo_inf == "Cajonera":
+                            cant_caj = st.number_input("Cant. Cajones", value=3, step=1, min_value=1, key=f"qty_caj_{i}")
+                            detalles_inf = {"alto": h_mod, "cant": cant_caj}
+                            st.caption(f"Frentes: {(h_mod-espesor)/cant_caj:.1f}mm")
+                        
+                        elif tipo_inf == "Puerta Baja":
+                            doble = st.checkbox("¿Doble Hoja?", value=False, key=f"doble_inf_{i}")
+                            detalles_inf = {"alto": h_mod, "doble": doble}
+                        else:
+                            detalles_inf = {"alto": h_mod} # Aunque sea vacío, ocupa espacio
+
+                    # Módulo Superior (Ocupa el resto)
+                    with c2:
+                        st.markdown("##### 🔼 Arriba")
+                        h_restante = alto - zocalo - h_mod
+                        st.caption(f"Espacio disponible: {h_restante}mm")
+                        
+                        if h_restante <= 0:
+                            st.error("Sin espacio. Achicá el módulo de abajo.")
+                            tipo_sup = "Vacío"
+                        else:
+                            # AHORA SE PERMITE CAJONERA ARRIBA
+                            tipo_sup = st.selectbox("Componente", ["Vacío", "Estantes", "Barral", "Puerta Alta", "Cajonera"], key=f"sup_{i}")
+                            
+                            if tipo_sup == "Estantes":
+                                cant_est = st.number_input("Cant. Estantes", value=3, step=1, key=f"qty_est_{i}")
+                                detalles_sup = {"cant": cant_est}
+                            
+                            elif tipo_sup == "Puerta Alta":
+                                 doble_sup = st.checkbox("¿Doble Hoja?", value=False, key=f"doble_sup_{i}")
+                                 detalles_sup = {"doble": doble_sup}
+                            
+                            elif tipo_sup == "Cajonera":
+                                cant_caj_sup = st.number_input("Cant. Cajones Sup", value=2, step=1, key=f"qty_caj_sup_{i}")
+                                detalles_sup = {"cant": cant_caj_sup}
+                                st.caption(f"Frentes: {(h_restante-espesor)/cant_caj_sup:.1f}mm")
 
                 configuracion_columnas.append({"inf_tipo": tipo_inf, "inf_data": detalles_inf, "sup_tipo": tipo_sup, "sup_data": detalles_sup})
 
 # ==============================================================================
-# 4. GRÁFICO DINÁMICO (PLOTLY)
+# 4. GRÁFICO DINÁMICO (PLOTLY) - MEJORADO
 # ==============================================================================
-def dibujar_mueble(ancho, alto, zocalo, columnas, configs, espesor_mat):
+def dibujar_mueble(ancho, alto, zocalo, columnas, configs, espesor_mat, es_push):
     fig = go.Figure()
     fig.update_layout(
         margin=dict(t=40, b=0, l=0, r=0), 
-        height=400,
+        height=450,
         xaxis=dict(visible=False, range=[-50, ancho+50]),
         yaxis=dict(visible=False, scaleanchor="x", scaleratio=1, range=[-50, alto+50]),
         plot_bgcolor="white",
-        title=f"Vista Previa: {ancho}x{alto} mm"
+        title=f"Vista Previa {ancho}x{alto}mm {'(Sistema Push)' if es_push else ''}"
     )
 
     # Casco
@@ -159,7 +209,7 @@ def dibujar_mueble(ancho, alto, zocalo, columnas, configs, espesor_mat):
             h_total = conf["inf_data"]["alto"]
             cant = conf["inf_data"]["cant"]
             
-            # Tapa
+            # Tapa Cajonera
             y_tapa = y_c + h_total
             fig.add_shape(type="rect", x0=x_s, y0=y_tapa-espesor_mat, x1=x_e, y1=y_tapa, fillcolor="#8B4513", line=dict(width=0))
             
@@ -169,42 +219,53 @@ def dibujar_mueble(ancho, alto, zocalo, columnas, configs, espesor_mat):
             for c in range(cant):
                 y_pos = y_c + (c * h_unit)
                 fig.add_shape(type="rect", x0=x_s+3, y0=y_pos+2, x1=x_e-3, y1=y_pos+h_unit-2, fillcolor="#85C1E9", line=dict(color="#2E86C1"))
-                fig.add_shape(type="line", x0=x_s+20, y0=y_pos+(h_unit/2), x1=x_e-20, y1=y_pos+(h_unit/2), line=dict(color="#154360", width=2))
+                
+                # MANIJA (Solo si no es Push)
+                if not es_push:
+                    # Manija más chica y centrada
+                    center_x = x_s + (ancho_col/2)
+                    center_y = y_pos + (h_unit/2)
+                    fig.add_shape(type="line", x0=center_x-15, y0=center_y, x1=center_x+15, y1=center_y, line=dict(color="#154360", width=3))
+            
             y_c += h_total
 
         elif conf["inf_tipo"] == "Puerta Baja":
             h = conf["inf_data"]["alto"]
             doble = conf["inf_data"]["doble"]
-            
             fig.add_shape(type="rect", x0=x_s+3, y0=y_c+2, x1=x_e-3, y1=y_c+h-2, fillcolor="#ABEBC6", line=dict(color="#196F3D"))
             
             if doble:
-                # Línea divisoria
                 mid = x_s + (ancho_col/2)
                 fig.add_shape(type="line", x0=mid, y0=y_c+2, x1=mid, y1=y_c+h-2, line=dict(color="#145A32", width=1))
-                # 2 Manijas
-                fig.add_shape(type="circle", x0=mid-15, y0=y_c+h-50, x1=mid-5, y1=y_c+h-40, fillcolor="black")
-                fig.add_shape(type="circle", x0=mid+5, y0=y_c+h-50, x1=mid+15, y1=y_c+h-40, fillcolor="black")
+                if not es_push:
+                    fig.add_shape(type="circle", x0=mid-12, y0=y_c+h-40, x1=mid-4, y1=y_c+h-32, fillcolor="black")
+                    fig.add_shape(type="circle", x0=mid+4, y0=y_c+h-40, x1=mid+12, y1=y_c+h-32, fillcolor="black")
             else:
-                # 1 Manija
-                px = x_e - 20 if i % 2 == 0 else x_s + 20
-                fig.add_shape(type="circle", x0=px-5, y0=y_c+h-50, x1=px+5, y1=y_c+h-40, fillcolor="black")
-                
+                if not es_push:
+                    px = x_e - 15 if i % 2 == 0 else x_s + 15
+                    fig.add_shape(type="circle", x0=px-4, y0=y_c+h-40, x1=px+4, y1=y_c+h-32, fillcolor="black")
             y_c += h
-
-        elif conf["inf_tipo"] == "Puerta Entera":
-            doble = conf["inf_data"]["doble"]
-            fig.add_shape(type="rect", x0=x_s+3, y0=y_c+2, x1=x_e-3, y1=alto-2, fillcolor="#D2B4DE", line=dict(color="#6C3483"))
             
+        elif conf["inf_tipo"] == "Puerta Entera":
+            h = conf["inf_data"]["alto"]
+            doble = conf["inf_data"]["doble"]
+            fig.add_shape(type="rect", x0=x_s+3, y0=y_c+2, x1=x_e-3, y1=y_c+h-2, fillcolor="#D2B4DE", line=dict(color="#6C3483"))
             if doble:
                 mid = x_s + (ancho_col/2)
-                fig.add_shape(type="line", x0=mid, y0=y_c+2, x1=mid, y1=alto-2, line=dict(color="#4A235A", width=1))
-                fig.add_shape(type="circle", x0=mid-15, y0=zocalo+900, x1=mid-5, y1=zocalo+910, fillcolor="black")
-                fig.add_shape(type="circle", x0=mid+5, y0=zocalo+900, x1=mid+15, y1=zocalo+910, fillcolor="black")
+                fig.add_shape(type="line", x0=mid, y0=y_c+2, x1=mid, y1=y_c+h-2, line=dict(color="#4A235A", width=1))
+                if not es_push:
+                    fig.add_shape(type="circle", x0=mid-12, y0=zocalo+900, x1=mid-4, y1=zocalo+908, fillcolor="black")
+                    fig.add_shape(type="circle", x0=mid+4, y0=zocalo+900, x1=mid+12, y1=zocalo+908, fillcolor="black")
             else:
-                px = x_e - 20 if i % 2 == 0 else x_s + 20
-                fig.add_shape(type="circle", x0=px-5, y0=zocalo+900, x1=px+5, y1=zocalo+910, fillcolor="black")
-            y_c = alto
+                if not es_push:
+                    px = x_e - 15 if i % 2 == 0 else x_s + 15
+                    fig.add_shape(type="circle", x0=px-4, y0=zocalo+900, x1=px+4, y1=zocalo+908, fillcolor="black")
+            y_c += h
+            
+        else:
+             # Si es vacío abajo, avanzamos el cursor según altura manual
+             if "alto" in conf["inf_data"]:
+                 y_c += conf["inf_data"]["alto"]
 
         # --- DIBUJO SUPERIOR ---
         restante = alto - y_c
@@ -227,28 +288,44 @@ def dibujar_mueble(ancho, alto, zocalo, columnas, configs, espesor_mat):
                  if doble:
                      mid = x_s + (ancho_col/2)
                      fig.add_shape(type="line", x0=mid, y0=y_c+2, x1=mid, y1=alto-2, line=dict(color="#9A7D0A", width=1))
-                     fig.add_shape(type="circle", x0=mid-15, y0=y_c+50, x1=mid-5, y1=y_c+60, fillcolor="black")
-                     fig.add_shape(type="circle", x0=mid+5, y0=y_c+50, x1=mid+15, y1=y_c+60, fillcolor="black")
+                     if not es_push:
+                         fig.add_shape(type="circle", x0=mid-12, y0=y_c+50, x1=mid-4, y1=y_c+58, fillcolor="black")
+                         fig.add_shape(type="circle", x0=mid+4, y0=y_c+50, x1=mid+12, y1=y_c+58, fillcolor="black")
                  else:
-                     px = x_e - 20 if i % 2 == 0 else x_s + 20
-                     fig.add_shape(type="circle", x0=px-5, y0=y_c+50, x1=px+5, y1=y_c+60, fillcolor="black")
+                     if not es_push:
+                         px = x_e - 15 if i % 2 == 0 else x_s + 15
+                         fig.add_shape(type="circle", x0=px-4, y0=y_c+50, x1=px+4, y1=y_c+58, fillcolor="black")
+            
+            elif conf["sup_tipo"] == "Cajonera": # Cajonera arriba
+                cant = conf["sup_data"]["cant"]
+                # TAPA DE ABJO (Piso de cajonera sup)
+                fig.add_shape(type="rect", x0=x_s, y0=y_c, x1=x_e, y1=y_c+espesor_mat, fillcolor="#8B4513", line=dict(width=0))
+                
+                h_util = restante - espesor_mat
+                h_unit = h_util / cant
+                y_base_caj = y_c + espesor_mat
+                
+                for c in range(cant):
+                    y_pos = y_base_caj + (c * h_unit)
+                    fig.add_shape(type="rect", x0=x_s+3, y0=y_pos+2, x1=x_e-3, y1=y_pos+h_unit-2, fillcolor="#85C1E9", line=dict(color="#2E86C1"))
+                    if not es_push:
+                         center_x = x_s + (ancho_col/2)
+                         center_y = y_pos + (h_unit/2)
+                         fig.add_shape(type="line", x0=center_x-15, y0=center_y, x1=center_x+15, y1=center_y, line=dict(color="#154360", width=3))
 
     return fig
 
 with contenedor_grafico:
-    st.plotly_chart(dibujar_mueble(ancho, alto, zocalo, cant_columnas, configuracion_columnas, espesor), use_container_width=True)
+    st.plotly_chart(dibujar_mueble(ancho, alto, zocalo, cant_columnas, configuracion_columnas, espesor, es_push), use_container_width=True)
 
 # ==============================================================================
-# 5. BOTÓN DE ACCIÓN
+# 5. PROCESAMIENTO
 # ==============================================================================
 with contenedor_boton:
     col_b1, col_b2, col_b3 = st.columns([1, 2, 1])
     with col_b2:
         procesar = st.button("🚀 PROCESAR PROYECTO COMPLETO", type="primary", use_container_width=True)
 
-# ==============================================================================
-# 6. LÓGICA DE CÁLCULO
-# ==============================================================================
 if procesar:
     piezas = []
     compras = []
@@ -270,25 +347,23 @@ if procesar:
     # B. Procesar Columnas
     for i, conf in enumerate(configuracion_columnas):
         
-        # --- CAJONES ---
-        if conf["inf_tipo"] == "Cajonera":
-            cant = conf["inf_data"]["cant"]
-            h_modulo_total = conf["inf_data"]["alto"]
-            
-            # Tapa Cajonera
+        # Función auxiliar para cajones
+        def procesar_cajones(tipo_origen, cant, h_total_ocupada, is_superior=False):
+            # TAPA/PISO ESTRUCTURAL
+            nota = "Tapa Cajonera" if not is_superior else "Piso Cajonera"
             piezas.append({
-                "Pieza": f"Tapa Cajonera (Col {i+1})", "Cant": 1, 
+                "Pieza": f"{nota} (Col {i+1})", "Cant": 1, 
                 "Largo": ancho_hueco, "Ancho": prof, "Veta": "↔️ Horiz", 
                 "Mat": f"Melamina {espesor}", "Nota": "Estructural"
             })
             
-            h_disponible_frentes = h_modulo_total - espesor
+            h_disponible = h_total_ocupada - espesor
             luz = 3
-            alto_frente_real = (h_disponible_frentes - ((cant - 1) * luz)) / cant
+            alto_frente_real = (h_disponible - ((cant - 1) * luz)) / cant
             
-            piezas.append({"Pieza": "Frente Cajón", "Cant": cant, "Largo": ancho_hueco-4, "Ancho": alto_frente_real, "Veta": veta_frentes, "Mat": f"Melamina {espesor}"})
+            piezas.append({"Pieza": f"Frente Cajón ({'Sup' if is_superior else 'Inf'})", "Cant": cant, "Largo": ancho_hueco-4, "Ancho": alto_frente_real, "Veta": veta_frentes, "Mat": f"Melamina {espesor}"})
             
-            # Lateral Cajón
+            # Caja
             espacio_caja = alto_frente_real - 30 
             lat_h = 0
             if espacio_caja >= 190: lat_h = 180
@@ -305,50 +380,43 @@ if procesar:
             else:
                 st.error(f"❌ Error Col {i+1}: Cajones muy bajos.")
 
-        # --- PUERTAS (LOGICA DE DOBLE HOJA) ---
-        def procesar_puerta(tipo, h_total, es_doble):
+        # Función auxiliar para puertas
+        def procesar_puerta(tipo, h, es_doble):
             cant_hojas = 2 if es_doble else 1
-            if es_doble:
-                # Ancho: Hueco - 2 luz izq - 2 luz der - 2 luz centro = Hueco - 6
-                ancho_hoja = (ancho_hueco - 6) / 2
-                nombre_pieza = f"{tipo} (x2 Hojas)"
-            else:
-                # Ancho: Hueco - 4
-                ancho_hoja = ancho_hueco - 4
-                nombre_pieza = tipo
-
-            piezas.append({
-                "Pieza": nombre_pieza, "Cant": cant_hojas, 
-                "Largo": h_total-4, "Ancho": ancho_hoja, 
-                "Veta": veta_frentes, "Mat": f"Melamina {espesor}"
-            })
+            ancho_hoja = (ancho_hueco - 6)/2 if es_doble else (ancho_hueco - 4)
+            nombre = f"{tipo} (x2)" if es_doble else tipo
             
-            # Bisagras
-            bisagras_por_hoja = 2 if h_total < 900 else (3 if h_total < 1600 else (4 if h_total < 2100 else 5))
-            compras.append({
-                "Item": f"Bisagras {tipo_bisagra}", 
-                "Cant": bisagras_por_hoja * cant_hojas, 
-                "Unidad": "u.", "Costo": costo_bisagra
-            })
+            piezas.append({"Pieza": nombre, "Cant": cant_hojas, "Largo": h-4, "Ancho": ancho_hoja, "Veta": veta_frentes, "Mat": f"Melamina {espesor}"})
+            
+            bisagras = 2 if h < 900 else (3 if h < 1600 else (4 if h < 2100 else 5))
+            compras.append({"Item": f"Bisagras {tipo_bisagra}", "Cant": bisagras * cant_hojas, "Unidad": "u.", "Costo": costo_bisagra})
 
-        if "Puerta" in conf["inf_tipo"]:
+        # --- LOGICA INFERIOR ---
+        if conf["inf_tipo"] == "Cajonera":
+            procesar_cajones("Inf", conf["inf_data"]["cant"], conf["inf_data"]["alto"], False)
+        
+        elif "Puerta" in conf["inf_tipo"]:
             h = conf["inf_data"]["alto"] if conf["inf_tipo"] == "Puerta Baja" else (alto - zocalo)
-            doble = conf["inf_data"].get("doble", False)
-            procesar_puerta(conf["inf_tipo"], h, doble)
+            procesar_puerta(conf["inf_tipo"], h, conf["inf_data"].get("doble", False))
 
-        if conf["sup_tipo"] == "Puerta Alta":
-             h_usada = conf["inf_data"].get("alto", 0)
-             h_rest = alto - zocalo - h_usada
-             doble = conf["sup_data"].get("doble", False)
-             procesar_puerta("Puerta Alta", h_rest, doble)
+        # --- LOGICA SUPERIOR ---
+        if conf["sup_tipo"] == "Cajonera":
+            # Calcular altura restante real
+            h_usada = conf["inf_data"].get("alto", 0)
+            h_rest = alto - zocalo - h_usada
+            procesar_cajones("Sup", conf["sup_data"]["cant"], h_rest, True)
 
-        # --- OTROS ---
-        if conf["sup_tipo"] == "Estantes":
+        elif conf["sup_tipo"] == "Puerta Alta":
+            h_usada = conf["inf_data"].get("alto", 0)
+            h_rest = alto - zocalo - h_usada
+            procesar_puerta("Puerta Alta", h_rest, conf["sup_data"].get("doble", False))
+
+        elif conf["sup_tipo"] == "Estantes":
             cant = conf["sup_data"]["cant"]
             piezas.append({"Pieza": "Estante Móvil", "Cant": cant, "Largo": ancho_hueco-2, "Ancho": prof-20, "Veta": "↔️ Horiz", "Mat": f"Melamina {espesor}"})
             compras.append({"Item": "Soportes Estante", "Cant": cant*4, "Unidad": "u.", "Costo": 50})
 
-        if conf["sup_tipo"] == "Barral":
+        elif conf["sup_tipo"] == "Barral":
             compras.append({"Item": "Barral Oval", "Cant": 1, "Unidad": "tira", "Nota": f"Cortar a {ancho_hueco-5:.0f}mm", "Costo": 3000})
             compras.append({"Item": "Soportes Barral", "Cant": 2, "Unidad": "u.", "Costo": 500})
 
