@@ -3,13 +3,13 @@ import pandas as pd
 import plotly.graph_objects as go
 import math
 
-st.set_page_config(page_title="CarpinterIA: V19 Smart", page_icon="🪚", layout="wide")
+st.set_page_config(page_title="CarpinterIA: V20 Physics Locked", page_icon="🪚", layout="wide")
 
 # ==============================================================================
 # 1. BARRA LATERAL
 # ==============================================================================
 with st.sidebar:
-    st.title("🪚 CarpinterIA V19")
+    st.title("🪚 CarpinterIA V20")
     st.markdown("### ⚙️ Configuración")
     
     # Materiales
@@ -56,9 +56,16 @@ st.divider()
 contenedor_boton = st.container()
 
 # ==============================================================================
-# 3. CONTROLES DE DISEÑO
+# 3. CONTROLES DE DISEÑO (CON LÓGICA LIMITANTE)
 # ==============================================================================
 configuracion_columnas = []
+
+# Función auxiliar para calcular límite de cajones
+def calcular_limite_cajones(altura_disponible_mm):
+    # Asumimos mínimo 70mm frente + 5mm luz = 75mm
+    if altura_disponible_mm <= 0: return 1
+    maximo = int(altura_disponible_mm / 75)
+    return max(1, maximo) # Siempre devolver al menos 1 para no romper el slider
 
 with contenedor_controles:
     col_medidas, col_distribucion = st.columns([1, 2])
@@ -105,8 +112,11 @@ with contenedor_controles:
                     h_util = alto - zocalo
                     
                     if tipo_inf == "Cajonera":
-                        cant_caj = st.number_input("Cant. Cajones", 6, step=1, key=f"qty_ent_{i}")
+                        # LÍMITE FÍSICO APLICADO
+                        max_c = calcular_limite_cajones(h_util)
+                        cant_caj = st.number_input("Cant. Cajones", min_value=1, max_value=max_c, value=min(6, max_c), step=1, key=f"qty_ent_{i}", help=f"Máximo físico: {max_c}")
                         detalles_inf = {"alto": h_util, "cant": cant_caj}
+                    
                     elif tipo_inf == "Puerta Entera":
                         doble = st.checkbox("Doble", False, key=f"d_ent_{i}")
                         detalles_inf = {"alto": h_util, "doble": doble, "interior": config_int(f"ei_{i}")}
@@ -122,11 +132,14 @@ with contenedor_controles:
                     with c1:
                         st.markdown("🔽 **Abajo**")
                         tipo_inf = st.selectbox("Tipo", ["Vacío", "Cajonera", "Puerta Baja"], key=f"inf_{i}")
-                        h_mod = st.number_input("Alto Corte (mm)", value=720, step=10, key=f"h_inf_{i}", help="Altura donde va el estante fijo divisor")
+                        h_mod = st.number_input("Alto Corte (mm)", value=720, step=10, key=f"h_inf_{i}")
                         
                         if tipo_inf == "Cajonera":
-                            cant_caj = st.number_input("Cant.", min_value=1, value=3, step=1, key=f"q_inf_{i}")
+                            # LÍMITE FÍSICO APLICADO
+                            max_c = calcular_limite_cajones(h_mod)
+                            cant_caj = st.number_input("Cant.", min_value=1, max_value=max_c, value=min(3, max_c), step=1, key=f"q_inf_{i}", help=f"Máximo físico: {max_c}")
                             detalles_inf = {"alto": h_mod, "cant": cant_caj}
+                        
                         elif tipo_inf == "Puerta Baja":
                             doble = st.checkbox("Doble", False, key=f"d_inf_{i}")
                             detalles_inf = {"alto": h_mod, "doble": doble, "interior": config_int(f"ii_{i}")}
@@ -135,17 +148,16 @@ with contenedor_controles:
 
                     with c2:
                         st.markdown("🔼 **Arriba**")
-                        # El espacio arriba empieza DESDE el estante fijo.
-                        # h_mod incluye el espesor del estante fijo en su tope.
                         h_rest = alto - zocalo - h_mod
                         st.caption(f"Libre: {h_rest}mm")
                         
-                        if h_rest > 0:
+                        if h_rest > 70: # Solo si hay espacio mínimo
                             tipo_sup = st.selectbox("Tipo", ["Vacío", "Estantes", "Barral", "Puerta Alta", "Cajonera"], key=f"sup_{i}")
                             
                             if tipo_sup == "Cajonera":
-                                max_cajones_posibles = max(1, int(h_rest / 75))
-                                cant = st.number_input("Cant.", min_value=1, max_value=max_cajones_posibles, value=min(2, max_cajones_posibles), step=1, key=f"qc_sup_{i}")
+                                # LÍMITE FÍSICO APLICADO
+                                max_c = calcular_limite_cajones(h_rest)
+                                cant = st.number_input("Cant.", min_value=1, max_value=max_c, value=min(2, max_c), step=1, key=f"qc_sup_{i}", help=f"Máximo físico: {max_c}")
                                 detalles_sup = {"cant": cant}
                             
                             elif tipo_sup == "Estantes":
@@ -155,7 +167,8 @@ with contenedor_controles:
                                 doble = st.checkbox("Doble", False, key=f"ds_sup_{i}")
                                 detalles_sup = {"doble": doble, "interior": config_int(f"is_{i}")}
                         else:
-                            st.error("Sin altura")
+                            st.error("Sin espacio útil")
+                            tipo_sup = "Vacío"
 
                 configuracion_columnas.append({"inf_tipo": tipo_inf, "inf_data": detalles_inf, "sup_tipo": tipo_sup, "sup_data": detalles_sup, "modo": modo_col})
 
@@ -190,27 +203,24 @@ def dibujar_mueble(ancho, alto, zocalo, columnas, configs, espesor_mat, es_push)
         xs = i * ancho_col; xe = (i + 1) * ancho_col; yc = zocalo 
         if i < columnas: fig.add_shape(type="line", x0=xe, y0=zocalo, x1=xe, y1=alto, line=dict(color="#5D4037", width=2))
 
-        # SI ES DIVIDIDA -> DIBUJAR ESTANTE FIJO (DIVISOR)
         if "Dividida" in conf["modo"]:
             h_div = conf["inf_data"]["alto"]
             y_div = zocalo + h_div
-            # Dibujamos el estante fijo que separa modulos
             fig.add_shape(type="rect", x0=xs, y0=y_div-espesor_mat, x1=xe, y1=y_div, fillcolor="#8B4513", line=dict(width=0))
 
         # INFERIOR
         t=conf["inf_tipo"]; d=conf["inf_data"]
         h_inf_total = d.get("alto", 0)
-        
-        # Altura util: Si es dividida, descontamos el espesor del estante fijo que está en el tope
         h_util_inf = h_inf_total - espesor_mat if "Dividida" in conf["modo"] else h_inf_total
 
         if t=="Cajonera":
             c=d["cant"]
-            hu=h_util_inf/c
-            for k in range(c): 
-                yp=yc+(k*hu)
-                fig.add_shape(type="rect", x0=xs+3, y0=yp+2, x1=xe-3, y1=yp+hu-2, fillcolor="#85C1E9", line=dict(color="#2E86C1"))
-                manija(xs+ancho_col/2, yp+hu/2)
+            if c > 0: # Prevención division zero
+                hu=h_util_inf/c
+                for k in range(c): 
+                    yp=yc+(k*hu)
+                    fig.add_shape(type="rect", x0=xs+3, y0=yp+2, x1=xe-3, y1=yp+hu-2, fillcolor="#85C1E9", line=dict(color="#2E86C1"))
+                    manija(xs+ancho_col/2, yp+hu/2)
             
         elif "Puerta" in t:
             interior(xs, xe, yc, h_util_inf, d.get("interior"))
@@ -220,7 +230,6 @@ def dibujar_mueble(ancho, alto, zocalo, columnas, configs, espesor_mat, es_push)
             if dob: mid=xs+ancho_col/2; fig.add_shape(type="line", x0=mid, y0=yc+2, x1=mid, y1=yc+h_util_inf-2, line=dict(color=coll, width=1)); manija(mid-15, yc+h_util_inf/2); manija(mid+15, yc+h_util_inf/2)
             else: px=xe-20 if i%2==0 else xs+20; manija(px, yc+h_util_inf/2)
 
-        # Actualizamos cursor vertical al borde del modulo
         yc += h_inf_total
 
         # SUPERIOR
@@ -235,11 +244,13 @@ def dibujar_mueble(ancho, alto, zocalo, columnas, configs, espesor_mat, es_push)
                 if dob: mid=xs+ancho_col/2; fig.add_shape(type="line", x0=mid, y0=yc+2, x1=mid, y1=alto-2, line=dict(color="#D4AC0D", width=1)); manija(mid-15, yc+50); manija(mid+15, yc+50)
                 else: px=xe-20 if i%2==0 else xs+20; manija(px, yc+50)
             elif ts=="Cajonera":
-                hu=rest/ds["cant"]
-                for k in range(ds["cant"]): 
-                    yp=yc+(k*hu)
-                    fig.add_shape(type="rect", x0=xs+3, y0=yp+2, x1=xe-3, y1=yp+hu-2, fillcolor="#85C1E9", line=dict(color="#2E86C1"))
-                    manija(xs+ancho_col/2, yp+hu/2)
+                c=ds["cant"]
+                if c>0:
+                    hu=rest/c
+                    for k in range(c): 
+                        yp=yc+(k*hu)
+                        fig.add_shape(type="rect", x0=xs+3, y0=yp+2, x1=xe-3, y1=yp+hu-2, fillcolor="#85C1E9", line=dict(color="#2E86C1"))
+                        manija(xs+ancho_col/2, yp+hu/2)
 
     return fig
 
@@ -260,48 +271,34 @@ with contenedor_boton:
         if cant_columnas > 1: pz.append({"Pieza": "Divisor Vert", "Cant": cant_columnas-1, "Largo": h_int, "Ancho": prof, "Veta": "↕️ Vert", "Mat": f"Melamina {espesor}"})
 
         w_hueco = (w_int - ((cant_columnas - 1) * espesor)) / cant_columnas
-        if w_hueco < 150: st.error("Hueco muy angosto."); st.stop()
+        if w_hueco < 150: st.error(f"Hueco de {w_hueco:.0f}mm es muy angosto para herrajes."); st.stop()
 
         for i, conf in enumerate(configuracion_columnas):
             
-            # --- DIVISOR HORIZONTAL (SI ES DIVIDIDA) ---
+            # --- DIVISOR HORIZONTAL ---
             if "Dividida" in conf["modo"]:
-                # Esta pieza es CLAVE: Es Techo de abajo y Piso de arriba
                 pz.append({"Pieza": f"Estante Fijo (Divisor C{i+1})", "Cant": 1, "Largo": w_hueco, "Ancho": prof, "Veta": "↔️ Horiz", "Mat": f"Melamina {espesor}", "Nota": "Estructural"})
 
             # --- CAJONES ---
             def do_cajon(pos, cant, h_tot, is_sup):
                 h_disp = h_tot
+                if "Dividida" in conf["modo"] and not is_sup: h_disp -= espesor
                 
-                # Descuentos de altura segun estructura
-                if "Dividida" in conf["modo"]:
-                    if not is_sup: 
-                        # Si es abajo, el estante fijo le roba altura (es su techo)
-                        h_disp -= espesor
-                    else:
-                        # Si es arriba, el estante fijo es su piso. No roba altura interior, pero ya la descontamos del espacio libre en el grafico.
-                        # En calculo, la altura disponible es h_rest (que ya es neta)
-                        pass
-                else: # Entera
-                    pass # Usa techo y piso mueble, no descuenta nada extra
-
                 hf = (h_disp - ((cant-1)*3)) / cant
-                if hf < 70: err.append(f"C{i+1}: Cajón {hf:.0f}mm muy bajo."); return
+                # Doble validacion (aunque el input ya limita)
+                if hf < 70: err.append(f"C{i+1}: Cajón de {hf:.0f}mm muy bajo."); return
 
                 pz.append({"Pieza": f"Frente {pos}", "Cant": cant, "Largo": w_hueco-4, "Ancho": hf, "Veta": veta_frentes, "Mat": f"Mela {espesor}"})
                 
-                # Caja (Laterales)
-                # Inteligencia: Busca el lateral mas grande que entre
+                # Caja
                 espacio_caja = hf - 30 
                 hl = 0
                 for size in [180, 150, 100]:
-                    if espacio_caja >= (size + 10): # +10 margen
-                        hl = size
-                        break
+                    if espacio_caja >= (size + 10): hl = size; break
                 
                 if hl==0: err.append(f"C{i+1}: Frente {hf:.0f}mm muy chico para lateral std."); return
                 
-                wc = w_hueco - (descuento_guia * 2) - 36 # 18+18 lados cajon
+                wc = w_hueco - (descuento_guia * 2) - 36
                 pz.append({"Pieza": "Lat. Cajón", "Cant": cant*2, "Largo": 500, "Ancho": hl, "Veta": "↔️", "Mat": "Blanca 18"})
                 pz.append({"Pieza": "Contra-Frente", "Cant": cant, "Largo": wc, "Ancho": hl, "Veta": "↔️", "Mat": "Blanca 18"})
                 pz.append({"Pieza": "Fondo Cajón", "Cant": cant, "Largo": 500, "Ancho": wc, "Veta": "-", "Mat": "Fibro 3"})
@@ -309,9 +306,7 @@ with contenedor_boton:
 
             # --- PUERTAS ---
             def do_puerta(nom, h, dob, din):
-                # Descuento de altura si hay divisor
                 h_real = h - espesor if ("Dividida" in conf["modo"] and "Baja" in nom) else h
-
                 hojas = 2 if dob else 1; wa = (w_hueco-6)/2 if dob else (w_hueco-4)
                 pz.append({"Pieza": f"{nom}", "Cant": hojas, "Largo": h_real-4, "Ancho": wa, "Veta": veta_frentes, "Mat": f"Mela {espesor}"})
                 bi = 2 if h_real<900 else (3 if h_real<1600 else (4 if h_real<2100 else 5))
@@ -329,27 +324,17 @@ with contenedor_boton:
             # EJECUCIÓN
             d_inf = conf["inf_data"]; d_sup = conf["sup_data"]
             
-            # 1. Inferior
-            if conf["inf_tipo"] == "Cajonera": 
-                do_cajon("Inf", d_inf["cant"], d_inf["alto"], False)
+            if conf["inf_tipo"] == "Cajonera": do_cajon("Inf", d_inf["cant"], d_inf["alto"], False)
             elif "Puerta" in conf["inf_tipo"]: 
                 h = d_inf["alto"] if "Baja" in conf["inf_tipo"] else (alto-zocalo)
                 do_puerta(conf["inf_tipo"], h, d_inf.get("doble"), d_inf.get("interior"))
             
-            # 2. Superior (Solo si dividida)
             if "Dividida" in conf["modo"]:
-                h_inf = d_inf.get("alto", 0)
-                # h_rest ya es neto desde el estante fijo hacia arriba
-                h_rest = alto - zocalo - h_inf 
-                
-                if conf["sup_tipo"] == "Cajonera": 
-                    do_cajon("Sup", d_sup["cant"], h_rest, True)
-                elif conf["sup_tipo"] == "Puerta Alta":
-                    do_puerta("Puerta Alta", h_rest, d_sup.get("doble"), d_sup.get("interior"))
-                elif conf["sup_tipo"] == "Estantes":
-                    pz.append({"Pieza": "Estante Móvil", "Cant": d_sup["cant"], "Largo": w_hueco-2, "Ancho": prof-20, "Veta": "↔️", "Mat": f"Mela {espesor}"})
-                elif conf["sup_tipo"] == "Barral":
-                    buy.append({"Item": "Barral", "Cant": 1, "Unidad": "u.", "Costo": 3000})
+                h_inf = d_inf.get("alto", 0); h_rest = alto - zocalo - h_inf 
+                if conf["sup_tipo"] == "Cajonera": do_cajon("Sup", d_sup["cant"], h_rest, True)
+                elif conf["sup_tipo"] == "Puerta Alta": do_puerta("Puerta Alta", h_rest, d_sup.get("doble"), d_sup.get("interior"))
+                elif conf["sup_tipo"] == "Estantes": pz.append({"Pieza": "Estante Móvil", "Cant": d_sup["cant"], "Largo": w_hueco-2, "Ancho": prof-20, "Veta": "↔️", "Mat": f"Mela {espesor}"})
+                elif conf["sup_tipo"] == "Barral": buy.append({"Item": "Barral", "Cant": 1, "Unidad": "u.", "Costo": 3000})
 
         if err:
             for e in err: st.error(e)
