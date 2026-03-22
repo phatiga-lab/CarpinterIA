@@ -7,7 +7,41 @@ st.set_page_config(
     layout="centered"
 )
 
-# Encabezado
+# ==============================================================================
+# BARRA LATERAL (NAVEGACIÓN PERSONALIZADA)
+# ==============================================================================
+with st.sidebar:
+    st.markdown("""
+        <style>
+        /* Ocultar el menú lateral por defecto de Streamlit */
+        [data-testid="stSidebarNav"] {display: none;}
+        
+        /* Tipografía personalizada para nuestros links de navegación */
+        .stPageLink a {
+            font-family: 'Trebuchet MS', 'Lucida Sans Unicode', sans-serif !important;
+            font-weight: 600 !important;
+            font-size: 1.15rem !important;
+            color: #2C3E50 !important;
+            padding-top: 5px;
+            padding-bottom: 5px;
+        }
+        .stPageLink a:hover {
+            color: #E67E22 !important; /* Color naranja al pasar el mouse */
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    st.image("https://cdn-icons-png.flaticon.com/512/3063/3063080.png", width=60)
+    st.title("CarpinterIA")
+    
+    st.markdown("### 📍 Navegación")
+    st.page_link("app.py", label="Menú Principal", icon="🏠")
+    st.page_link("pages/1_placares.py", label="Módulo Placares", icon="🗄️")
+    st.page_link("pages/2_escritorios.py", label="Módulo Escritorios", icon="🪑")
+
+# ==============================================================================
+# PANTALLA CENTRAL (HUB)
+# ==============================================================================
 st.image("https://cdn-icons-png.flaticon.com/512/3063/3063080.png", width=80)
 st.title("CarpinterIA Hub")
 st.subheader("Plataforma de Diseño y Despiece CAM")
