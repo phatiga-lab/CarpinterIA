@@ -17,38 +17,35 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 1. BARRA LATERAL (AJUSTES GLOBALES)
+# BARRA LATERAL (NAVEGACIÓN PERSONALIZADA)
 # ==============================================================================
 with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/3063/3063080.png", width=60)
-    st.title("CarpinterIA")
-    st.caption("v25 - Ultimate Fix")
-    st.divider()
-
-    with st.expander("🪵 1. Tableros y Materiales", expanded=True):
-        espesor = st.selectbox("Espesor Estructural", [18, 15], index=0)
-        fondo_esp = st.selectbox("Espesor Fondo", [3, 5.5, 18], index=0)
-        zocalo = st.number_input("Altura Zócalo (mm)", value=70, step=5)
-        veta_frentes = st.radio("Veta Visual Frentes", ["↔️ Horizontal", "↕️ Vertical"], index=0)
-
-    with st.expander("🔩 2. Herrajes Estándar", expanded=False):
-        tipo_corredera = st.selectbox("Correderas Cajón", ["Telescópicas", "Comunes (Z)", "Push / Tip-On"])
-        es_push = "Push" in tipo_corredera
-        descuento_guia = 26 if ("Telescópicas" in tipo_corredera or es_push) else 25
-        costo_guia_ref = 6500 if ("Telescópicas" in tipo_corredera or es_push) else 2500
+    st.markdown("""
+        <style>
+        /* Ocultar el menú lateral por defecto de Streamlit */
+        [data-testid="stSidebarNav"] {display: none;}
         
-        tipo_bisagra = st.selectbox("Bisagras Lateral", ["Codo 0 (Ext)", "Codo 9 (Media)", "Codo 18 (Int)", "Push"])
+        /* Tipografía personalizada para nuestros links de navegación */
+        .stPageLink a {
+            font-family: 'Trebuchet MS', 'Lucida Sans Unicode', sans-serif !important;
+            font-weight: 600 !important;
+            font-size: 1.15rem !important;
+            color: #2C3E50 !important;
+            padding-top: 5px;
+            padding-bottom: 5px;
+        }
+        .stPageLink a:hover {
+            color: #E67E22 !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
-    with st.expander("💲 3. Costos y Precios", expanded=False):
-        precio_placa = st.number_input("Placa Melamina ($)", value=85000, step=1000)
-        precio_fondo = st.number_input("Placa Fondo ($)", value=25000, step=1000)
-        precio_canto = st.number_input("Metro Canto ($)", value=800, step=50)
-        c_bis = st.number_input("Bisagra ($)", value=2500, step=100)
-        c_guia = st.number_input("Par Guías ($)", value=costo_guia_ref, step=500)
-        c_piston = st.number_input("Pistón a Gas ($)", value=4500, step=500)
-        c_kit = st.number_input("Kit Corredizo ml ($)", value=15000, step=1000)
-        margen = st.number_input("Multiplicador (Ganancia)", value=2.5, step=0.1)
-
+    st.title("CarpinterIA")
+    
+    st.markdown("### 📍 Navegación")
+    st.page_link("app.py", label="Menú Principal", icon="🏠")
+    st.page_link("pages/1_placares.py", label="Módulo Placares", icon="🗄️")
+    st.page_link("pages/2_escritorios.py", label="Módulo Escritorios", icon="🪑")
 # ==============================================================================
 # HELPERS LOGICOS
 # ==============================================================================
