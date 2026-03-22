@@ -187,7 +187,6 @@ with col_visual:
 
     elif funcion == "Cajonera Mixta":
         cant_c = config.get("cajones", 1)
-        # Asignamos 200mm de alto util teórico por cajón
         h_bloque_cajones = cant_c * 200
         hu_frente = h_bloque_cajones / cant_c
         
@@ -199,7 +198,6 @@ with col_visual:
             z_puerta_sup = z_base + h_bloque_cajones + 10
             dibujar_placa(x0 + 2, x1 - 2, y0 - espesor, y0, z_puerta_sup, alto_total - 2, color_frentes, "Puerta Superior", 0.7)
             
-            # Un estante en el medio del espacio de la puerta
             h_hueco_sup = alto_total - espesor - z_puerta_sup
             z_estante_sup = z_puerta_sup + (h_hueco_sup / 2)
             dibujar_placa(int_x0 + 2, int_x1 - 2, int_y0 + 20, int_y1, z_estante_sup, z_estante_sup + espesor, color_estantes, "Estante Sup.")
@@ -224,7 +222,7 @@ with col_visual:
     def add_p(nombre, cant, largo, ancho, esp, mat, nota=""):
         canto = "-"
         if any(p in nombre for p in ["Frente Cajón", "Puerta"]): canto = "4L"
-        elif any(p in nombre for p in ["Lateral"]): canto = "1L" # En cajas/placares, el lateral canta solo el frente
+        elif any(p in nombre for p in ["Lateral"]): canto = "1L" 
         elif any(p in nombre for p in ["Piso", "Techo", "Estante", "Zócalo"]): canto = "1L"
             
         pz.append({"Pieza": nombre, "Cant": cant, "Largo": largo, "Ancho": ancho, "Espesor": esp, "Mat": mat, "Cantos": canto, "Nota": nota})
@@ -236,4 +234,78 @@ with col_visual:
     add_p("Techo", 1, w_util_caja, prof_total, espesor, "Estruct", "Carcasa")
     
     if zocalo > 0:
-        add_p("Z
+        add_p("Zócalo Frontal", 1, w_util_caja, zocalo, espesor, "Estruct", "Base")
+        add_p("Zócalo Trasero", 1, w_util_caja, zocalo, espesor, "Estruct", "Base")
+
+    if tiene_fondo:
+        pz.append({"Pieza": "Fondo Módulo", "Cant": 1, "Largo": alto_total - 5, "Ancho": ancho_total - 5, "Espesor": espesor_fondo, "Mat": f"Fondo {espesor_fondo}", "Cantos": "-", "Nota": "Clavado/Ranurado"})
+
+    # INTERIOR
+    w_hueco = w_util_caja
+    w_frente = w_hueco + (espesor * 2) - 4 
+    prof_estante = prof_total - (espesor_fondo if tiene_fondo else 0) - 20
+
+    if funcion == "Estantes Abiertos" or funcion == "Puertas":
+        cant_e = config.get("estantes", 0)
+        if cant_e > 0:
+            add_p("Estante Móvil", cant_e, w_hueco - 2, prof_estante, espesor, "Estruct", "Interior")
+            
+        if funcion == "Puertas":
+            h_frente = alto_total - zocalo - 4
+            cant_p = config["puertas"]
+            if cant_p == 1:
+                add_p("Puerta Entera", 1, h_frente, w_frente, espesor, "Frentes", "Apertura Lateral")
+                buy.append({"Item": f"Bisagras {tipo_bisagra}", "Cant": 4 if h_frente > 1500 else 3, "Unidad": "u.", "Costo": c_bis})
+            else:
+                add_p("Puerta Media", 2, h_frente, (w_frente/2) - 2, espesor, "Frentes", "Apertura Doble")
+                buy.append({"Item": f"Bisagras {tipo_bisagra}", "Cant": 8 if h_frente > 1500 else 6, "Unidad": "u.", "Costo": c_bis})
+
+    elif funcion == "Cajonera Mixta":
+        cant_c = config.get("cajones", 1)
+        h_bloque_cajones = cant_c * 200
+        hf = (h_bloque_cajones - ((cant_c - 1) * 3)) / cant_c
+        
+        # Frentes
+        add_p("Frente Cajón", cant_c, w_frente, hf, espesor, "Frentes", "")
+        
+        # Caja de cajón
+        l_guia = min(500, max(250, int((prof_total - 30) // 50) * 50))
+        h_lateral_cajon = max(70, int(hf - 40)) 
+        w_contrafrente = w_hueco - descuento_guia - (espesor * 2)
+        
+        add_p("Lat. Cajón", cant_c * 2, l_guia, h_lateral_cajon, espesor, "Estruct", "Cajón")
+        add_p("Contra-Frente", cant_c * 2, w_contrafrente, h_lateral_cajon, espesor, "Estruct", "Cajón")
+        pz.append({"Pieza": "Fondo Cajón", "Cant": cant_c, "Largo": l_guia, "Ancho": w_hueco - descuento_guia, "Espesor": 3, "Mat": "Fibro 3", "Cantos": "-", "Nota": "Cajón"})
+        buy.append({"Item": f"Guías {tipo_corredera} {l_guia}mm", "Cant": cant_c, "Unidad": "par", "Costo": c_guia})
+
+        if config.get("puerta_sup", False):
+            h_puerta_sup = alto_total - zocalo - h_bloque_cajones - 10
+            add_p("Puerta Superior", 1, h_puerta_sup, w_frente, espesor, "Frentes", "Arriba de cajones")
+            buy.append({"Item": f"Bisagras {tipo_bisagra}", "Cant": 2, "Unidad": "u.", "Costo": c_bis})
+            add_p("Estante Móvil", 1, w_hueco - 2, prof_estante, espesor, "Estruct", "Interior Sup.")
+
+    # INSUMOS
+    buy.insert(0, {"Item": "Tornillos 4x50 / Minifix", "Cant": len(pz)*4, "Unidad": "u.", "Costo": 15})
+    
+    m_canto_mm = 0
+    for p in pz:
+        if p["Cantos"] == "4L": m_canto_mm += (p["Largo"]*2 + p["Ancho"]*2) * p["Cant"]
+        elif p["Cantos"] == "1L": m_canto_mm += p["Largo"] * p["Cant"]
+            
+    buy.append({"Item": f"Canto {tipo_canto}", "Cant": math.ceil((m_canto_mm/1000)*1.2), "Unidad": "m", "Costo": precio_canto})
+
+    # TABS DE RESULTADOS
+    t1, t2, t3 = st.tabs(["📝 Despiece y Cantos", "🔩 Herrajes", "💰 Presupuesto"])
+    with t1: 
+        df = pd.DataFrame(pz)
+        st.dataframe(df.style.format({"Largo": "{:.0f}", "Ancho": "{:.0f}"}), use_container_width=True, hide_index=True)
+        st.download_button("📥 Exportar CSV", df.to_csv(index=False).encode(), "corte_placares.csv")
+    with t2: 
+        st.dataframe(pd.DataFrame(buy).groupby(["Item","Unidad"], as_index=False).sum(), use_container_width=True, hide_index=True)
+    with t3: 
+        placas = math.ceil((sum([p["Largo"]*p["Ancho"]*p["Cant"] for p in pz if "Fondo" not in str(p["Mat"]) and p["Mat"]!="Fibro 3"])/1e6*1.3)/4.75)
+        c_mat = (placas * precio_placa)
+        c_herr = sum([c["Costo"]*c["Cant"] for c in buy])
+        st.write(f"- Melamina base (estructura/frentes): ~{placas} placas (${c_mat:,.0f})")
+        st.write(f"- Total Insumos (Herrajes/Cantos): ${c_herr:,.0f}")
+        st.metric("PRECIO SUGERIDO VENTA", f"${(c_mat + c_herr) * margen:,.0f}")
