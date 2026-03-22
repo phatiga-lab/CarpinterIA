@@ -6,7 +6,7 @@ import math
 # ==============================================================================
 # CONFIGURACIÓN DE PÁGINA
 # ==============================================================================
-st.set_page_config(page_title="CarpinterIA V25 - 3D", page_icon="🗄️", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="CarpinterIA V25 - 3D Clean", page_icon="🗄️", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
     <style>
@@ -101,7 +101,7 @@ configuracion_columnas = []
 col_controles, col_visual = st.columns([1.1, 1.9], gap="large")
 
 # ------------------------------------------------------------------------------
-# ZONA IZQUIERDA: CONTROLES Y DISEÑO (LOGICA V25 INTACTA)
+# ZONA IZQUIERDA: CONTROLES Y DISEÑO 
 # ------------------------------------------------------------------------------
 with col_controles:
     st.header("📐 Configuración")
@@ -182,31 +182,45 @@ with col_controles:
             configuracion_columnas.append(modulos_columna)
 
 # ------------------------------------------------------------------------------
-# ZONA DERECHA: VISUALIZADOR 3D (REEMPLAZADO)
+# ZONA DERECHA: VISUALIZADOR 3D (MEJORADO SIN DIAGONALES)
 # ------------------------------------------------------------------------------
 with col_visual:
     st.header("👁️ Vista Previa 3D")
     
     fig = go.Figure()
     
-    # Colores
-    color_carcasa = "#8B4513"
-    color_frentes = "#AED6F1"
-    color_estantes = "#A0522D"
+    # Colores Sólidos de Alto Contraste
+    color_carcasa = "#5D4037" # Madera muy oscura
+    color_estantes = "#D4AC0D" # Roble / Mostaza sólido
+    color_cajones = "#2874A6" # Azul sólido 
+    color_frentes = "#85C1E9" # Celestes para vidrios/transparencias
     
-    def dibujar_placa(x0, x1, y0, y1, z0, z1, color, nombre, opacidad=1):
+    # 1. Función para Cajas Sólidas (Estructuras y Cajones)
+    def dibujar_placa(x0, x1, y0, y1, z0, z1, color, nombre):
         dim_x = int(abs(x1 - x0)); dim_y = int(abs(y1 - y0)); dim_z = int(abs(z1 - z0))
         hover_text = f"<b>{nombre}</b><br>{dim_x} x {dim_y} x {dim_z} mm"
         fig.add_trace(go.Mesh3d(x=[x0,x1,x1,x0,x0,x1,x1,x0], y=[y0,y0,y1,y1,y0,y0,y1,y1], z=[z0,z0,z0,z0,z1,z1,z1,z1],
             i=[7,0,0,0,4,4,3,3,7,2,6,6], j=[3,4,1,2,5,6,2,3,6,7,1,2], k=[0,7,2,3,6,7,1,0,2,5,5,1],
-            opacity=opacidad, color=color, flatshading=True, name=nombre, hoverinfo="text", text=hover_text)) 
+            opacity=1, color=color, flatshading=True, name=nombre, hoverinfo="text", text=hover_text)) 
+
+    # 2. Función para Vidrios/Transparencias (Evita las diagonales de malla)
+    def dibujar_plano_y(px0, px1, py, pz0, pz1, color, nombre, opacidad=0.5):
+        dim_x = int(abs(px1 - px0)); dim_y = 18; dim_z = int(abs(pz1 - pz0)) # Espesor figurativo para la etiqueta
+        hover_text = f"<b>{nombre}</b><br>{dim_x} x {dim_y} x {dim_z} mm"
+        fig.add_trace(go.Mesh3d(
+            x=[px0, px1, px1, px0],
+            y=[py, py, py, py],
+            z=[pz0, pz0, pz1, pz1],
+            i=[0, 0], j=[1, 2], k=[2, 3], # 2 triángulos formando un solo rectángulo perfecto
+            opacity=opacidad, color=color, name=nombre, hoverinfo="text", text=hover_text
+        ))
 
     # Coordenadas maestras base
     x_base = -ancho / 2
-    y_base = 0
+    y_base = 0 # FRENTE ABSOLUTO
     prof_int = prof - 85 if tiene_placard else prof
     
-    # 1. CASCO
+    # 1. CASCO SÓLIDO
     dibujar_placa(x_base, x_base + espesor, y_base, prof, zocalo, alto, color_carcasa, "Lateral Izquierdo")
     dibujar_placa(x_base + ancho - espesor, x_base + ancho, y_base, prof, zocalo, alto, color_carcasa, "Lateral Derecho")
     dibujar_placa(x_base + espesor, x_base + ancho - espesor, y_base, prof, zocalo, zocalo + espesor, color_carcasa, "Piso")
@@ -217,17 +231,15 @@ with col_visual:
         dibujar_placa(x_base + espesor, x_base + ancho - espesor, y_base, y_base + espesor, 0, zocalo, color_carcasa, "Zócalo Frontal")
         dibujar_placa(x_base + espesor, x_base + ancho - espesor, prof - espesor, prof, 0, zocalo, color_carcasa, "Zócalo Trasero")
 
-    # 2. INTERIOR (Lógica mapeada desde V25 a 3D)
+    # 2. INTERIOR SÓLIDO 
     w_int = ancho - (espesor * 2)
     w_hueco = (w_int - ((cant_columnas - 1) * espesor)) / cant_columnas
     
     for i, modulos in enumerate(configuracion_columnas):
-        # Coordenadas X de esta columna
         col_x0 = x_base + espesor + i * (w_hueco + espesor)
         col_x1 = col_x0 + w_hueco
         zc = zocalo + espesor
         
-        # Divisor vertical (si no es la última columna)
         if i < cant_columnas - 1:
             dibujar_placa(col_x1, col_x1 + espesor, y_base, prof_int, zocalo + espesor, alto - espesor, color_carcasa, f"Divisor Vertical {i+1}")
 
@@ -237,12 +249,10 @@ with col_visual:
             h_mod = mod["alto"]
             h_util = mod["h_util"]
             
-            # Divisor horizontal (Estante Fijo)
             if m < len(modulos) - 1:
                 z_div = zc + h_util
                 dibujar_placa(col_x0, col_x1, y_base, prof_int, z_div, z_div + espesor, color_carcasa, f"Estante Fijo C{i+1} M{m+1}")
 
-            # Componentes internos
             int_y0 = y_base + 5
             int_y1 = prof_int - 5
 
@@ -268,21 +278,22 @@ with col_visual:
                 c = data["cant"]; hu = h_util / c
                 for k in range(c): 
                     zp = zc + (k * hu) + 2
-                    dibujar_placa(col_x0 + 2, col_x1 - 2, y_base, y_base + espesor, zp, zp + hu - 4, color_frentes, f"Frente Cajón C{i+1}", 0.85)
+                    # CAJONES OPACOS
+                    dibujar_placa(col_x0 + 2, col_x1 - 2, y_base, y_base + espesor, zp, zp + hu - 4, color_cajones, f"Frente Cajón C{i+1}")
 
             elif tipo == "Puerta":
                 interior_3d(data.get("interior"), zc)
                 mnt = data.get("montaje", "Externa")
                 dob = data.get("doble", False)
                 p_y0 = y_base - espesor if "Externa" in mnt else y_base
-                p_y1 = p_y0 + espesor
                 
+                # PUERTAS TRANSPARENTES SIN DIAGONALES
                 if dob:
                     mid = col_x0 + (w_hueco / 2)
-                    dibujar_placa(col_x0 + 2, mid - 1, p_y0, p_y1, zc + 2, zc + h_util - 2, color_frentes, "Puerta Izq", 0.7)
-                    dibujar_placa(mid + 1, col_x1 - 2, p_y0, p_y1, zc + 2, zc + h_util - 2, color_frentes, "Puerta Der", 0.7)
+                    dibujar_plano_y(col_x0 + 2, mid - 1, p_y0, zc + 2, zc + h_util - 2, color_frentes, "Puerta Izq", 0.65)
+                    dibujar_plano_y(mid + 1, col_x1 - 2, p_y0, zc + 2, zc + h_util - 2, color_frentes, "Puerta Der", 0.65)
                 else:
-                    dibujar_placa(col_x0 + 2, col_x1 - 2, p_y0, p_y1, zc + 2, zc + h_util - 2, color_frentes, "Puerta", 0.7)
+                    dibujar_plano_y(col_x0 + 2, col_x1 - 2, p_y0, zc + 2, zc + h_util - 2, color_frentes, "Puerta", 0.65)
 
             elif tipo == "Estantes": 
                 interior_3d({"tipo":"Estantes", "cant":data.get("cant", 0)}, zc)
@@ -300,8 +311,9 @@ with col_visual:
         ancho_h_visual = ancho / hojas_placard
         for h in range(hojas_placard):
             xh = x_base + (h * ancho_h_visual)
-            p_y0 = prof - 60 if h % 2 == 0 else prof - 30
-            dibujar_placa(xh, xh + ancho_h_visual + 20, p_y0, p_y0 + 18, zocalo + 5, alto - 5, "rgba(236, 240, 241, 0.5)", f"Hoja Corrediza {h+1}", 0.5)
+            # CORREGIDO: SE DIBUJAN EN EL FRENTE (Y_BASE)
+            p_y0 = y_base + 10 if h % 2 == 0 else y_base + 40
+            dibujar_plano_y(xh, xh + ancho_h_visual + 20, p_y0, zocalo + 5, alto - 5, "rgba(236, 240, 241, 0.7)", f"Hoja Corrediza {h+1}", 0.6)
 
     # Escena limpia
     max_dim = max(ancho, alto)
@@ -314,7 +326,7 @@ with col_visual:
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
 # ==============================================================================
-# 5. CÁLCULO Y RESULTADOS (MÁS LÓGICA DE CANTOS)
+# 5. CÁLCULO Y RESULTADOS 
 # ==============================================================================
 st.markdown("---")
 col_b1, col_b2, col_b3 = st.columns([1, 2, 1])
@@ -324,11 +336,10 @@ with col_b2:
 if procesar:
     pz = []; buy = []; err = []
     
-    # Lógica de asignación de cantos actualizada
     def add_p(nombre, cant, largo, ancho, veta, mat, nota=""):
         c = "-"
         if any(p in nombre for p in ["Frente", "Puerta", "Hoja"]): c = "4L"
-        elif any(p in nombre for p in ["Lat. Externo"]): c = "1L" # Lateral de placard canta al frente
+        elif any(p in nombre for p in ["Lat. Externo"]): c = "1L" 
         elif any(p in nombre for p in ["Techo", "Piso", "Estante", "Divisor", "Zócalo", "Contra-Frente", "Lat. Cajón"]): c = "1L"
         
         pz.append({"Pieza": nombre, "Cant": cant, "Largo": largo, "Ancho": ancho, "Veta": veta, "Mat": mat, "Cantos": c, "Nota": nota})
@@ -411,7 +422,6 @@ if procesar:
     else:
         buy.insert(0, {"Item": "Tornillos 4x50", "Cant": len(pz)*4, "Unidad": "u.", "Costo": 10})
         
-        # Cálculo de metros de tapacanto
         m_canto_mm = 0
         for p in pz:
             if p["Cantos"] == "4L": m_canto_mm += (p["Largo"]*2 + p["Ancho"]*2) * p["Cant"]
