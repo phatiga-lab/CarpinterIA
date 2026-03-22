@@ -6,7 +6,7 @@ import math
 # ==============================================================================
 # CONFIGURACIÓN DE PÁGINA
 # ==============================================================================
-st.set_page_config(page_title="CarpinterIA V25", page_icon="🪚", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="CarpinterIA V25 - 3D", page_icon="🗄️", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
     <style>
@@ -17,17 +17,38 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 1. BARRA LATERAL (AJUSTES GLOBALES)
+# 1. BARRA LATERAL (NAVEGACIÓN Y AJUSTES GLOBALES)
 # ==============================================================================
 with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/3063/3063080.png", width=60)
+    st.markdown("""
+        <style>
+        [data-testid="stSidebarNav"] {display: none;}
+        .stPageLink a {
+            font-family: 'Trebuchet MS', 'Lucida Sans Unicode', sans-serif !important;
+            font-weight: 600 !important;
+            font-size: 1.15rem !important;
+            color: #2C3E50 !important;
+            padding-top: 5px;
+            padding-bottom: 5px;
+        }
+        .stPageLink a:hover {
+            color: #E67E22 !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
     st.title("CarpinterIA")
-    st.caption("v25 - Ultimate Fix")
+    
+    st.markdown("### 📍 Navegación")
+    st.page_link("app.py", label="Menú Principal", icon="🏠")
+    st.page_link("pages/1_placares.py", label="Módulo Placares", icon="🗄️")
+    st.page_link("pages/2_escritorios.py", label="Módulo Escritorios", icon="🪑")
     st.divider()
 
     with st.expander("🪵 1. Tableros y Materiales", expanded=True):
         espesor = st.selectbox("Espesor Estructural", [18, 15], index=0)
         fondo_esp = st.selectbox("Espesor Fondo", [3, 5.5, 18], index=0)
+        tipo_canto = st.selectbox("Tipo de Canto", ["Melamínico 0.45mm", "PVC 0.45mm", "PVC 2mm ABS"], index=1)
         zocalo = st.number_input("Altura Zócalo (mm)", value=70, step=5)
         veta_frentes = st.radio("Veta Visual Frentes", ["↔️ Horizontal", "↕️ Vertical"], index=0)
 
@@ -42,7 +63,7 @@ with st.sidebar:
     with st.expander("💲 3. Costos y Precios", expanded=False):
         precio_placa = st.number_input("Placa Melamina ($)", value=85000, step=1000)
         precio_fondo = st.number_input("Placa Fondo ($)", value=25000, step=1000)
-        precio_canto = st.number_input("Metro Canto ($)", value=800, step=50)
+        precio_canto = st.number_input(f"Metro Canto {tipo_canto[:3]} ($)", value=800, step=50)
         c_bis = st.number_input("Bisagra ($)", value=2500, step=100)
         c_guia = st.number_input("Par Guías ($)", value=costo_guia_ref, step=500)
         c_piston = st.number_input("Pistón a Gas ($)", value=4500, step=500)
@@ -61,7 +82,6 @@ def ui_puerta(s):
     mnt = c2.selectbox("Montaje", ["Externa", "Interna"], key=f"mnt_{s}")
     dob = st.checkbox("Doble Hoja", False, key=f"d_{s}") if "Lateral" in ap else False
     
-    # Interior 100% visible, sin expander oculto
     st.caption("🔍 Interior (Detrás de la puerta)")
     t = st.radio("Tipo Interior", ["Vacío", "Estantes", "Cubos"], horizontal=True, key=f"t_int_{s}")
     d = {}
@@ -81,7 +101,7 @@ configuracion_columnas = []
 col_controles, col_visual = st.columns([1.1, 1.9], gap="large")
 
 # ------------------------------------------------------------------------------
-# ZONA IZQUIERDA: CONTROLES Y DISEÑO
+# ZONA IZQUIERDA: CONTROLES Y DISEÑO (LOGICA V25 INTACTA)
 # ------------------------------------------------------------------------------
 with col_controles:
     st.header("📐 Configuración")
@@ -137,7 +157,6 @@ with col_controles:
 
                     h_util = h_mod - (espesor if not is_top else 0)
 
-                    # AGREGADO: "Cubos" ahora es opción principal
                     tipo = st.selectbox("Componente", ["Vacío", "Cajonera", "Puerta", "Estantes", "Cubos", "Barral"], key=f"tc_{i}_{m}", label_visibility="collapsed")
                     
                     data = {}
@@ -163,39 +182,54 @@ with col_controles:
             configuracion_columnas.append(modulos_columna)
 
 # ------------------------------------------------------------------------------
-# ZONA DERECHA: VISUALIZADOR Y RESULTADOS
+# ZONA DERECHA: VISUALIZADOR 3D (REEMPLAZADO)
 # ------------------------------------------------------------------------------
 with col_visual:
-    st.header("👁️ Vista Previa en Vivo")
+    st.header("👁️ Vista Previa 3D")
     
     fig = go.Figure()
-    fig.update_layout(margin=dict(t=10, b=0, l=0, r=0), height=450, xaxis=dict(visible=False, range=[-50, ancho+50]), yaxis=dict(visible=False, scaleanchor="x", scaleratio=1, range=[-50, alto+50]), plot_bgcolor="#F8F9F9")
-
-    # Casco
-    fig.add_shape(type="rect", x0=0, y0=0, x1=ancho, y1=zocalo, fillcolor="#34495E", line=dict(color="black"))
-    fig.add_shape(type="rect", x0=0, y0=zocalo, x1=ancho, y1=alto, line=dict(color="#5D4037", width=5))
     
-    ancho_col = ancho / cant_columnas
+    # Colores
+    color_carcasa = "#8B4513"
+    color_frentes = "#AED6F1"
+    color_estantes = "#A0522D"
     
-    def manija(cx, cy, orientacion="v"):
-        if not es_push: 
-            if orientacion=="v": fig.add_shape(type="line", x0=cx, y0=cy-15, x1=cx, y1=cy+15, line=dict(color="#1A5276", width=4))
-            else: fig.add_shape(type="line", x0=cx-15, y0=cy, x1=cx+15, y1=cy, line=dict(color="#1A5276", width=4))
+    def dibujar_placa(x0, x1, y0, y1, z0, z1, color, nombre, opacidad=1):
+        dim_x = int(abs(x1 - x0)); dim_y = int(abs(y1 - y0)); dim_z = int(abs(z1 - z0))
+        hover_text = f"<b>{nombre}</b><br>{dim_x} x {dim_y} x {dim_z} mm"
+        fig.add_trace(go.Mesh3d(x=[x0,x1,x1,x0,x0,x1,x1,x0], y=[y0,y0,y1,y1,y0,y0,y1,y1], z=[z0,z0,z0,z0,z1,z1,z1,z1],
+            i=[7,0,0,0,4,4,3,3,7,2,6,6], j=[3,4,1,2,5,6,2,3,6,7,1,2], k=[0,7,2,3,6,7,1,0,2,5,5,1],
+            opacity=opacidad, color=color, flatshading=True, name=nombre, hoverinfo="text", text=hover_text)) 
 
-    def interior(x0, x1, y0, h, d):
-        if not d: return
-        t=d.get("tipo")
-        if t=="Estantes":
-            c=d.get("cant", 1); p=h/(c+1)
-            for k in range(c): y=y0+(p*(k+1)); fig.add_shape(type="line", x0=x0+5, y0=y, x1=x1-5, y1=y, line=dict(color="#BA4A00", width=2, dash="dot"))
-        elif t=="Cubos":
-            cols=d.get("cols", 1); rows=d.get("rows", 1); ph=h/rows; pw=(x1-x0)/cols
-            for r in range(1,rows): y=y0+(ph*r); fig.add_shape(type="line", x0=x0+5, y0=y, x1=x1-5, y1=y, line=dict(color="#BA4A00", width=2, dash="dot"))
-            for c in range(1,cols): x=x0+(pw*c); fig.add_shape(type="line", x0=x, y0=y0+5, x1=x, y1=y0+h-5, line=dict(color="#BA4A00", width=2, dash="dot"))
+    # Coordenadas maestras base
+    x_base = -ancho / 2
+    y_base = 0
+    prof_int = prof - 85 if tiene_placard else prof
+    
+    # 1. CASCO
+    dibujar_placa(x_base, x_base + espesor, y_base, prof, zocalo, alto, color_carcasa, "Lateral Izquierdo")
+    dibujar_placa(x_base + ancho - espesor, x_base + ancho, y_base, prof, zocalo, alto, color_carcasa, "Lateral Derecho")
+    dibujar_placa(x_base + espesor, x_base + ancho - espesor, y_base, prof, zocalo, zocalo + espesor, color_carcasa, "Piso")
+    dibujar_placa(x_base + espesor, x_base + ancho - espesor, y_base, prof, alto - espesor, alto, color_carcasa, "Techo")
+    dibujar_placa(x_base + espesor, x_base + ancho - espesor, prof - fondo_esp, prof, zocalo + espesor, alto - espesor, "#D2B48C", "Fondo")
+    
+    if zocalo > 0:
+        dibujar_placa(x_base + espesor, x_base + ancho - espesor, y_base, y_base + espesor, 0, zocalo, color_carcasa, "Zócalo Frontal")
+        dibujar_placa(x_base + espesor, x_base + ancho - espesor, prof - espesor, prof, 0, zocalo, color_carcasa, "Zócalo Trasero")
 
+    # 2. INTERIOR (Lógica mapeada desde V25 a 3D)
+    w_int = ancho - (espesor * 2)
+    w_hueco = (w_int - ((cant_columnas - 1) * espesor)) / cant_columnas
+    
     for i, modulos in enumerate(configuracion_columnas):
-        xs = i * ancho_col; xe = xs + ancho_col; yc = zocalo 
-        if i < cant_columnas: fig.add_shape(type="line", x0=xe, y0=zocalo, x1=xe, y1=alto, line=dict(color="#5D4037", width=2))
+        # Coordenadas X de esta columna
+        col_x0 = x_base + espesor + i * (w_hueco + espesor)
+        col_x1 = col_x0 + w_hueco
+        zc = zocalo + espesor
+        
+        # Divisor vertical (si no es la última columna)
+        if i < cant_columnas - 1:
+            dibujar_placa(col_x1, col_x1 + espesor, y_base, prof_int, zocalo + espesor, alto - espesor, color_carcasa, f"Divisor Vertical {i+1}")
 
         for m, mod in enumerate(modulos):
             tipo = mod["tipo"]
@@ -203,61 +237,86 @@ with col_visual:
             h_mod = mod["alto"]
             h_util = mod["h_util"]
             
+            # Divisor horizontal (Estante Fijo)
             if m < len(modulos) - 1:
-                y_div = yc + h_mod
-                fig.add_shape(type="rect", x0=xs, y0=y_div-espesor, x1=xe, y1=y_div, fillcolor="#8B4513", line=dict(width=0))
+                z_div = zc + h_util
+                dibujar_placa(col_x0, col_x1, y_base, prof_int, z_div, z_div + espesor, color_carcasa, f"Estante Fijo C{i+1} M{m+1}")
+
+            # Componentes internos
+            int_y0 = y_base + 5
+            int_y1 = prof_int - 5
+
+            def interior_3d(d_int, z_start):
+                if not d_int: return
+                t_int = d_int.get("tipo")
+                if t_int == "Estantes":
+                    ce = d_int.get("cant", 1); pe = h_util / (ce + 1)
+                    for k in range(ce):
+                        ze = z_start + (pe * (k + 1))
+                        dibujar_placa(col_x0 + 2, col_x1 - 2, int_y0 + 20, int_y1, ze, ze + espesor, color_estantes, f"Estante Int {k+1}")
+                elif t_int == "Cubos":
+                    cols = d_int.get("cols", 1); rows = d_int.get("rows", 1)
+                    ph = h_util / rows; pw = w_hueco / cols
+                    for r in range(1, rows):
+                        ze = z_start + (ph * r)
+                        dibujar_placa(col_x0 + 2, col_x1 - 2, int_y0 + 20, int_y1, ze, ze + espesor, color_estantes, "Estante Cubo")
+                    for c in range(1, cols):
+                        xe = col_x0 + (pw * c)
+                        dibujar_placa(xe, xe + espesor, int_y0 + 20, int_y1, z_start + 2, z_start + h_util - 2, color_estantes, "Divisor Cubo")
 
             if tipo == "Cajonera" and data.get("cant", 0) > 0:
-                c = data["cant"]; hu = h_util/c
+                c = data["cant"]; hu = h_util / c
                 for k in range(c): 
-                    yp = yc + (k*hu)
-                    fig.add_shape(type="rect", x0=xs+3, y0=yp+2, x1=xe-3, y1=yp+hu-2, fillcolor="#AED6F1", line=dict(color="#2874A6"))
-                    manija(xs+ancho_col/2, yp+hu/2, "h")
+                    zp = zc + (k * hu) + 2
+                    dibujar_placa(col_x0 + 2, col_x1 - 2, y_base, y_base + espesor, zp, zp + hu - 4, color_frentes, f"Frente Cajón C{i+1}", 0.85)
 
             elif tipo == "Puerta":
-                interior(xs, xe, yc, h_util, data.get("interior"))
-                colf="rgba(169, 223, 191, 0.7)" if m==0 else ("rgba(249, 231, 159, 0.7)" if m==len(modulos)-1 else "rgba(215, 189, 226, 0.7)")
-                dob=data.get("doble"); ap=data.get("apertura", "Lateral")
+                interior_3d(data.get("interior"), zc)
+                mnt = data.get("montaje", "Externa")
+                dob = data.get("doble", False)
+                p_y0 = y_base - espesor if "Externa" in mnt else y_base
+                p_y1 = p_y0 + espesor
                 
-                fig.add_shape(type="rect", x0=xs+3, y0=yc+2, x1=xe-3, y1=yc+h_util-2, fillcolor=colf, line=dict(color="gray"))
-                
-                if dob: 
-                    mid=xs+ancho_col/2; fig.add_shape(type="line", x0=mid, y0=yc+2, x1=mid, y1=yc+h_util-2, line=dict(color="gray", width=1))
-                    manija(mid-15, yc+h_util/2); manija(mid+15, yc+h_util/2)
-                else: 
-                    if "Arriba" in ap: manija(xs+ancho_col/2, yc+30, "h")
-                    elif "Abajo" in ap: manija(xs+ancho_col/2, yc+h_util-30, "h")
-                    else: manija(xe-20 if i%2==0 else xs+20, yc+h_util/2)
+                if dob:
+                    mid = col_x0 + (w_hueco / 2)
+                    dibujar_placa(col_x0 + 2, mid - 1, p_y0, p_y1, zc + 2, zc + h_util - 2, color_frentes, "Puerta Izq", 0.7)
+                    dibujar_placa(mid + 1, col_x1 - 2, p_y0, p_y1, zc + 2, zc + h_util - 2, color_frentes, "Puerta Der", 0.7)
+                else:
+                    dibujar_placa(col_x0 + 2, col_x1 - 2, p_y0, p_y1, zc + 2, zc + h_util - 2, color_frentes, "Puerta", 0.7)
 
             elif tipo == "Estantes": 
-                interior(xs, xe, yc, h_util, {"tipo":"Estantes","cant":data.get("cant",0)})
+                interior_3d({"tipo":"Estantes", "cant":data.get("cant", 0)}, zc)
                 
             elif tipo == "Cubos":
-                interior(xs, xe, yc, h_util, {"tipo":"Cubos","cols":data.get("cols",1), "rows":data.get("rows",1)})
+                interior_3d({"tipo":"Cubos", "cols":data.get("cols", 1), "rows":data.get("rows", 1)}, zc)
                 
             elif tipo == "Barral": 
-                yb = yc + (h_util*0.2) if h_util<500 else yc + 100
-                fig.add_shape(type="line", x0=xs+10, y0=yb, x1=xe-10, y1=yb, line=dict(color="gray", width=5))
-                fig.add_annotation(x=xs+ancho_col/2, y=yb-30, text="👕", showarrow=False)
+                zb = zc + (h_util * 0.2) if h_util < 500 else zc + h_util - 80
+                fig.add_trace(go.Scatter3d(x=[col_x0 + 10, col_x1 - 10], y=[int_y0 + (prof_int/2)]*2, z=[zb]*2, mode='lines', line=dict(color='gray', width=12), name="Barral", hoverinfo="text", text="Barral Aluminio"))
 
-            yc += h_mod
+            zc += h_mod
 
     if tiene_placard:
         ancho_h_visual = ancho / hojas_placard
-        fig.add_shape(type="line", x0=0, y0=zocalo, x1=ancho, y1=zocalo, line=dict(color="#7F8C8D", width=6))
-        fig.add_shape(type="line", x0=0, y0=alto, x1=ancho, y1=alto, line=dict(color="#7F8C8D", width=6))
         for h in range(hojas_placard):
-            xh = h * ancho_h_visual
-            fig.add_shape(type="rect", x0=xh, y0=zocalo+3, x1=xh+ancho_h_visual+15, y1=alto-3, fillcolor="rgba(236, 240, 241, 0.7)", line=dict(color="#95A5A6", width=2))
-            fig.add_shape(type="line", x0=xh+10, y0=zocalo+10, x1=xh+10, y1=alto-10, line=dict(color="#7F8C8D", width=4))
+            xh = x_base + (h * ancho_h_visual)
+            p_y0 = prof - 60 if h % 2 == 0 else prof - 30
+            dibujar_placa(xh, xh + ancho_h_visual + 20, p_y0, p_y0 + 18, zocalo + 5, alto - 5, "rgba(236, 240, 241, 0.5)", f"Hoja Corrediza {h+1}", 0.5)
 
+    # Escena limpia
+    max_dim = max(ancho, alto)
+    no_axis = dict(showbackground=False, showgrid=False, zeroline=False, showticklabels=False, title="", visible=False)
+    fig.update_layout(
+        scene=dict(xaxis=no_axis, yaxis=no_axis, zaxis=no_axis, aspectmode='data'),
+        margin=dict(r=0, l=0, b=0, t=0), scene_camera=dict(eye=dict(x=1.6, y=-1.6, z=0.5)),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)"
+    )
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
 # ==============================================================================
-# 5. CÁLCULO Y RESULTADOS
+# 5. CÁLCULO Y RESULTADOS (MÁS LÓGICA DE CANTOS)
 # ==============================================================================
 st.markdown("---")
-# BOTÓN DE PROCESAR CENTRADO
 col_b1, col_b2, col_b3 = st.columns([1, 2, 1])
 with col_b2:
     procesar = st.button("🚀 PROCESAR DESPIECE Y PRESUPUESTO", type="primary", use_container_width=True)
@@ -265,8 +324,13 @@ with col_b2:
 if procesar:
     pz = []; buy = []; err = []
     
+    # Lógica de asignación de cantos actualizada
     def add_p(nombre, cant, largo, ancho, veta, mat, nota=""):
-        c = "4L" if ("Frente" in nombre or "Puerta" in nombre or "Hoja" in nombre) else ("1L" if "Lat. Caj" in nombre or "Contra" in nombre or "Estante" in nombre or "Techo" in nombre or "Piso" in nombre or "Divisor" in nombre or "Lat. Externo" in nombre else "-")
+        c = "-"
+        if any(p in nombre for p in ["Frente", "Puerta", "Hoja"]): c = "4L"
+        elif any(p in nombre for p in ["Lat. Externo"]): c = "1L" # Lateral de placard canta al frente
+        elif any(p in nombre for p in ["Techo", "Piso", "Estante", "Divisor", "Zócalo", "Contra-Frente", "Lat. Cajón"]): c = "1L"
+        
         pz.append({"Pieza": nombre, "Cant": cant, "Largo": largo, "Ancho": ancho, "Veta": veta, "Mat": mat, "Cantos": c, "Nota": nota})
 
     prof_int = prof - 85 if tiene_placard else prof
@@ -274,7 +338,7 @@ if procesar:
     
     add_p("Lat. Externo", 2, alto, prof, "↕️", f"Mela {espesor}") 
     add_p("Techo/Piso", 2, w_int, prof, "↔️", f"Mela {espesor}")
-    add_p("Fondo", 1, alto-15, ancho-15, "-", f"Fibro {fondo_esp}")
+    pz.append({"Pieza": "Fondo", "Cant": 1, "Largo": alto-15, "Ancho": ancho-15, "Veta": "-", "Mat": f"Fibro {fondo_esp}", "Cantos": "-", "Nota": ""})
     
     if cant_columnas > 1: add_p("Divisor Vert", cant_columnas-1, h_int, prof_int, "↕️", f"Mela {espesor}")
     w_hueco = (w_int - ((cant_columnas - 1) * espesor)) / cant_columnas
@@ -292,18 +356,20 @@ if procesar:
                 add_p(f"Estante Fijo (C{i+1} M{m+1})", 1, w_hueco, prof_int, "↔️", f"Mela {espesor}", "Estructural")
 
             if tipo == "Cajonera":
-                cant = data["cant"]; hf = (h_util - ((cant-1)*3)) / cant
-                add_p(f"Frente Cajón C{i+1}-M{m+1}", cant, w_hueco-4, hf, veta_frentes, f"Mela {espesor}")
-                
-                esp = hf - 30; hl = 180 if esp>=190 else (150 if esp>=160 else (100 if esp>=110 else 0))
-                if hl==0: err.append(f"C{i+1} M{m+1}: Frente muy bajo para cajón."); continue
-                
-                l_guia = min(550, max(250, int((prof_int - 15) // 50) * 50))
-                wc = w_hueco - (descuento_guia * 2) - 36
-                add_p("Lat. Cajón", cant*2, l_guia, hl, "↔️", "Blanca 18")
-                add_p("Contra-Frente", cant, wc, hl, "↔️", "Blanca 18")
-                add_p("Fondo Cajón", cant, l_guia, wc, "-", "Fibro 3")
-                buy.append({"Item": f"Guías {tipo_corredera} {l_guia}mm", "Cant": cant, "Unidad": "par", "Costo": c_guia})
+                cant = data.get("cant", 0); 
+                if cant > 0:
+                    hf = (h_util - ((cant-1)*3)) / cant
+                    add_p(f"Frente Cajón C{i+1}-M{m+1}", cant, w_hueco-4, hf, veta_frentes, f"Mela {espesor}")
+                    
+                    esp = hf - 30; hl = 180 if esp>=190 else (150 if esp>=160 else (100 if esp>=110 else 0))
+                    if hl==0: err.append(f"C{i+1} M{m+1}: Frente muy bajo para cajón."); continue
+                    
+                    l_guia = min(550, max(250, int((prof_int - 15) // 50) * 50))
+                    wc = w_hueco - (descuento_guia * 2) - 36
+                    add_p("Lat. Cajón", cant*2, l_guia, hl, "↔️", "Blanca 18")
+                    add_p("Contra-Frente", cant, wc, hl, "↔️", "Blanca 18")
+                    pz.append({"Pieza": "Fondo Cajón", "Cant": cant, "Largo": l_guia, "Ancho": wc, "Veta": "-", "Mat": "Fibro 3", "Cantos": "-", "Nota": ""})
+                    buy.append({"Item": f"Guías {tipo_corredera} {l_guia}mm", "Cant": cant, "Unidad": "par", "Costo": c_guia})
 
             elif tipo == "Puerta":
                 ap = data.get("apertura", "Lateral"); mnt = data.get("montaje", "Externa")
@@ -326,30 +392,37 @@ if procesar:
                     pint = prof_int - 20 if "Externa" in mnt else prof_int - 40 
                     if din["tipo"]=="Estantes": add_p(f"Estante Int. C{i+1}", din["cant"], w_hueco-2, pint, "↔️", f"Mela {espesor}")
                     elif din["tipo"]=="Cubos":
-                        if din["cols"]>1: add_p("Div. Vert. Cubo", din["cols"]-1, ha-2, pint, "↕️", f"Mela {espesor}")
-                        if din["rows"]>1: add_p("Estante Cubo", din["rows"]-1, w_hueco-2, pint, "↔️", f"Mela {espesor}")
+                        if din.get("cols", 1)>1: add_p("Div. Vert. Cubo", din["cols"]-1, ha-2, pint, "↕️", f"Mela {espesor}")
+                        if din.get("rows", 1)>1: add_p("Estante Cubo", din["rows"]-1, w_hueco-2, pint, "↔️", f"Mela {espesor}")
 
             elif tipo == "Estantes":
-                add_p(f"Estante Móvil C{i+1}", data["cant"], w_hueco-2, prof_int-20, "↔️", f"Mela {espesor}")
+                add_p(f"Estante Móvil C{i+1}", data.get("cant", 0), w_hueco-2, prof_int-20, "↔️", f"Mela {espesor}")
                 
             elif tipo == "Cubos":
-                c = data["cols"]; r = data["rows"]
+                c = data.get("cols", 1); r = data.get("rows", 1)
                 if c > 1: add_p(f"Div. Vert. Cubo C{i+1}-M{m+1}", c-1, h_util-2, prof_int-20, "↕️", f"Mela {espesor}")
                 if r > 1: add_p(f"Estante Cubo C{i+1}-M{m+1}", r-1, w_hueco-2, prof_int-20, "↔️", f"Mela {espesor}")
                 
             elif tipo == "Barral":
-                buy.append({"Item": "Barral", "Cant": 1, "Unidad": "u.", "Costo": 3000})
+                buy.append({"Item": "Barral Aluminio", "Cant": 1, "Unidad": "u.", "Costo": 3000})
 
     if err:
         for e in err: st.error(e)
     else:
         buy.insert(0, {"Item": "Tornillos 4x50", "Cant": len(pz)*4, "Unidad": "u.", "Costo": 10})
         
+        # Cálculo de metros de tapacanto
+        m_canto_mm = 0
+        for p in pz:
+            if p["Cantos"] == "4L": m_canto_mm += (p["Largo"]*2 + p["Ancho"]*2) * p["Cant"]
+            elif p["Cantos"] == "1L": m_canto_mm += p["Largo"] * p["Cant"]
+        buy.append({"Item": f"Canto {tipo_canto}", "Cant": math.ceil((m_canto_mm/1000)*1.2), "Unidad": "m", "Costo": precio_canto})
+
         t1, t2, t3 = st.tabs(["📝 Despiece", "🔩 Insumos", "💰 Costos"])
         with t1: 
             df = pd.DataFrame(pz)
             st.dataframe(df.style.format({"Largo": "{:.0f}", "Ancho": "{:.0f}"}), use_container_width=True, hide_index=True)
-            st.download_button("📥 Exportar CSV para Corte", df.to_csv(index=False).encode(), "corte_v25.csv")
+            st.download_button("📥 Exportar CSV para Corte", df.to_csv(index=False).encode(), "corte_v25_3D.csv")
         with t2: 
             st.dataframe(pd.DataFrame(buy).groupby(["Item","Unidad"], as_index=False).sum(), use_container_width=True, hide_index=True)
         with t3: 
@@ -357,5 +430,5 @@ if procesar:
             c_mat = (placas * precio_placa)
             c_herr = sum([c["Costo"]*c["Cant"] for c in buy])
             st.write(f"- Melamina necesaria: ~{placas} placas (${c_mat:,.0f})")
-            st.write(f"- Total Herrajes: ${c_herr:,.0f}")
+            st.write(f"- Total Insumos (Herrajes/Cantos): ${c_herr:,.0f}")
             st.metric("PRECIO DE VENTA", f"${(c_mat + c_herr) * margen:,.0f}")
