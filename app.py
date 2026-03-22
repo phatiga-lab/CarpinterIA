@@ -26,12 +26,11 @@ with st.sidebar:
             padding-bottom: 5px;
         }
         .stPageLink a:hover {
-            color: #E67E22 !important; /* Color naranja al pasar el mouse */
+            color: #E67E22 !important;
         }
         </style>
     """, unsafe_allow_html=True)
 
-    st.image("https://cdn-icons-png.flaticon.com/512/3063/3063080.png", width=60)
     st.title("CarpinterIA")
     
     st.markdown("### 📍 Navegación")
@@ -42,7 +41,6 @@ with st.sidebar:
 # ==============================================================================
 # PANTALLA CENTRAL (HUB)
 # ==============================================================================
-st.image("https://cdn-icons-png.flaticon.com/512/3063/3063080.png", width=80)
 st.title("CarpinterIA Hub")
 st.subheader("Plataforma de Diseño y Despiece CAM")
 st.markdown("---")
