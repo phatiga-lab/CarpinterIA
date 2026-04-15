@@ -114,8 +114,6 @@ with col_controles:
         prof = c_dim3.number_input("Prof. (mm)", value=600, step=10)
         
         st.divider()
-        cant_columnas = st.number_input("Columnas Internas", min_value=1, max_value=5, value=2, step=1)
-        
         tiene_placard = st.toggle("🚪 Envolver con Frente Corredizo", value=False)
         hojas_placard = 0
         if tiene_placard:
@@ -124,6 +122,7 @@ with col_controles:
                 st.warning("⚠️ Profundidad < 600mm. Recomendamos más profundidad para los rieles corredizos.")
 
     st.subheader("2. Diseño Interno por Columna")
+    cant_columnas = st.number_input("Columnas Internas", min_value=1, max_value=5, value=2, step=1)
     tabs = st.tabs([f"Columna {i+1}" for i in range(cant_columnas)])
     
     for i, tab in enumerate(tabs):
@@ -182,20 +181,18 @@ with col_controles:
             configuracion_columnas.append(modulos_columna)
 
 # ------------------------------------------------------------------------------
-# ZONA DERECHA: VISUALIZADOR 3D (MEJORADO SIN DIAGONALES)
+# ZONA DERECHA: VISUALIZADOR 3D 
 # ------------------------------------------------------------------------------
 with col_visual:
     st.header("👁️ Vista Previa 3D")
     
     fig = go.Figure()
     
-    # Colores Sólidos de Alto Contraste
-    color_carcasa = "#5D4037" # Madera muy oscura
-    color_estantes = "#D4AC0D" # Roble / Mostaza sólido
-    color_cajones = "#2874A6" # Azul sólido 
-    color_frentes = "#85C1E9" # Celestes para vidrios/transparencias
+    color_carcasa = "#5D4037" 
+    color_estantes = "#D4AC0D" 
+    color_cajones = "#2874A6" 
+    color_frentes = "#85C1E9" 
     
-    # 1. Función para Cajas Sólidas (Estructuras y Cajones)
     def dibujar_placa(x0, x1, y0, y1, z0, z1, color, nombre):
         dim_x = int(abs(x1 - x0)); dim_y = int(abs(y1 - y0)); dim_z = int(abs(z1 - z0))
         hover_text = f"<b>{nombre}</b><br>{dim_x} x {dim_y} x {dim_z} mm"
@@ -203,24 +200,24 @@ with col_visual:
             i=[7,0,0,0,4,4,3,3,7,2,6,6], j=[3,4,1,2,5,6,2,3,6,7,1,2], k=[0,7,2,3,6,7,1,0,2,5,5,1],
             opacity=1, color=color, flatshading=True, name=nombre, hoverinfo="text", text=hover_text)) 
 
-    # 2. Función para Vidrios/Transparencias (Evita las diagonales de malla)
     def dibujar_plano_y(px0, px1, py, pz0, pz1, color, nombre, opacidad=0.5):
-        dim_x = int(abs(px1 - px0)); dim_y = 18; dim_z = int(abs(pz1 - pz0)) # Espesor figurativo para la etiqueta
+        dim_x = int(abs(px1 - px0)); dim_y = 18; dim_z = int(abs(pz1 - pz0)) 
         hover_text = f"<b>{nombre}</b><br>{dim_x} x {dim_y} x {dim_z} mm"
         fig.add_trace(go.Mesh3d(
             x=[px0, px1, px1, px0],
             y=[py, py, py, py],
             z=[pz0, pz0, pz1, pz1],
-            i=[0, 0], j=[1, 2], k=[2, 3], # 2 triángulos formando un solo rectángulo perfecto
-            opacity=opacidad, color=color, name=nombre, hoverinfo="text", text=hover_text
+            i=[0, 0], j=[1, 2], k=[2, 3], 
+            opacity=opacidad, color=color, name=nombre, hoverinfo="text", text=hover_text,
+            # ESTO ELIMINA EL EFECTO TRIANGULO DE LAS TRANSPARENCIAS
+            lighting=dict(ambient=1, diffuse=0, specular=0, roughness=1, fresnel=0) 
         ))
 
-    # Coordenadas maestras base
     x_base = -ancho / 2
-    y_base = 0 # FRENTE ABSOLUTO
+    y_base = 0 
     prof_int = prof - 85 if tiene_placard else prof
     
-    # 1. CASCO SÓLIDO
+    # CASCO
     dibujar_placa(x_base, x_base + espesor, y_base, prof, zocalo, alto, color_carcasa, "Lateral Izquierdo")
     dibujar_placa(x_base + ancho - espesor, x_base + ancho, y_base, prof, zocalo, alto, color_carcasa, "Lateral Derecho")
     dibujar_placa(x_base + espesor, x_base + ancho - espesor, y_base, prof, zocalo, zocalo + espesor, color_carcasa, "Piso")
@@ -231,7 +228,7 @@ with col_visual:
         dibujar_placa(x_base + espesor, x_base + ancho - espesor, y_base, y_base + espesor, 0, zocalo, color_carcasa, "Zócalo Frontal")
         dibujar_placa(x_base + espesor, x_base + ancho - espesor, prof - espesor, prof, 0, zocalo, color_carcasa, "Zócalo Trasero")
 
-    # 2. INTERIOR SÓLIDO 
+    # INTERIOR
     w_int = ancho - (espesor * 2)
     w_hueco = (w_int - ((cant_columnas - 1) * espesor)) / cant_columnas
     
@@ -278,7 +275,6 @@ with col_visual:
                 c = data["cant"]; hu = h_util / c
                 for k in range(c): 
                     zp = zc + (k * hu) + 2
-                    # CAJONES OPACOS
                     dibujar_placa(col_x0 + 2, col_x1 - 2, y_base, y_base + espesor, zp, zp + hu - 4, color_cajones, f"Frente Cajón C{i+1}")
 
             elif tipo == "Puerta":
@@ -287,7 +283,6 @@ with col_visual:
                 dob = data.get("doble", False)
                 p_y0 = y_base - espesor if "Externa" in mnt else y_base
                 
-                # PUERTAS TRANSPARENTES SIN DIAGONALES
                 if dob:
                     mid = col_x0 + (w_hueco / 2)
                     dibujar_plano_y(col_x0 + 2, mid - 1, p_y0, zc + 2, zc + h_util - 2, color_frentes, "Puerta Izq", 0.65)
@@ -311,11 +306,9 @@ with col_visual:
         ancho_h_visual = ancho / hojas_placard
         for h in range(hojas_placard):
             xh = x_base + (h * ancho_h_visual)
-            # CORREGIDO: SE DIBUJAN EN EL FRENTE (Y_BASE)
             p_y0 = y_base + 10 if h % 2 == 0 else y_base + 40
             dibujar_plano_y(xh, xh + ancho_h_visual + 20, p_y0, zocalo + 5, alto - 5, "rgba(236, 240, 241, 0.7)", f"Hoja Corrediza {h+1}", 0.6)
 
-    # Escena limpia
     max_dim = max(ancho, alto)
     no_axis = dict(showbackground=False, showgrid=False, zeroline=False, showticklabels=False, title="", visible=False)
     fig.update_layout(
@@ -338,8 +331,9 @@ if procesar:
     
     def add_p(nombre, cant, largo, ancho, veta, mat, nota=""):
         c = "-"
-        if any(p in nombre for p in ["Frente", "Puerta", "Hoja"]): c = "4L"
-        elif any(p in nombre for p in ["Lat. Externo"]): c = "1L" 
+        # Laterales externos ahora están en el grupo de 4L
+        if any(p in nombre for p in ["Frente", "Puerta", "Hoja", "Lat. Externo"]): c = "4L"
+        # Divisores (tabiques) siguen en el grupo de 1L
         elif any(p in nombre for p in ["Techo", "Piso", "Estante", "Divisor", "Zócalo", "Contra-Frente", "Lat. Cajón"]): c = "1L"
         
         pz.append({"Pieza": nombre, "Cant": cant, "Largo": largo, "Ancho": ancho, "Veta": veta, "Mat": mat, "Cantos": c, "Nota": nota})
@@ -349,6 +343,12 @@ if procesar:
     
     add_p("Lat. Externo", 2, alto, prof, "↕️", f"Mela {espesor}") 
     add_p("Techo/Piso", 2, w_int, prof, "↔️", f"Mela {espesor}")
+    
+    # ZÓCALOS INCORPORADOS
+    if zocalo > 0:
+        add_p("Zócalo Frontal", 1, w_int, zocalo, "↔️", f"Mela {espesor}", "Base")
+        add_p("Zócalo Trasero", 1, w_int, zocalo, "↔️", f"Mela {espesor}", "Base")
+        
     pz.append({"Pieza": "Fondo", "Cant": 1, "Largo": alto-15, "Ancho": ancho-15, "Veta": "-", "Mat": f"Fibro {fondo_esp}", "Cantos": "-", "Nota": ""})
     
     if cant_columnas > 1: add_p("Divisor Vert", cant_columnas-1, h_int, prof_int, "↕️", f"Mela {espesor}")
