@@ -6,7 +6,7 @@ import math
 # ==============================================================================
 # CONFIGURACIÓN DE PÁGINA
 # ==============================================================================
-st.set_page_config(page_title="CarpinterIA V25 - CAM", page_icon="🗄️", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="CarpinterIA V25 - CAM Pro", page_icon="🗄️", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
     <style>
@@ -207,9 +207,6 @@ with col_visual:
     prof_int = prof - 85 if tiene_placard else prof
     
     if "3D" in modo_vista:
-        # ==========================================
-        # MOTOR 3D (AHORA CON LÍNEAS DE CONTORNO)
-        # ==========================================
         fig = go.Figure()
         
         color_carcasa = "#5D4037" 
@@ -217,7 +214,6 @@ with col_visual:
         color_cajones = "#2874A6" 
         color_frentes = "#85C1E9" 
         
-        # Vectores globales para dibujar todas las líneas negras de una sola vez (super eficiente)
         edges_x, edges_y, edges_z = [], [], []
 
         def track_edges(x0, x1, y0, y1, z0, z1):
@@ -240,12 +236,10 @@ with col_visual:
             fig.add_trace(go.Mesh3d(x=[px0, px1, px1, px0], y=[py, py, py, py], z=[pz0, pz0, pz1, pz1],
                 i=[0, 0], j=[1, 2], k=[2, 3], opacity=opacidad, color=color, name=nombre, hoverinfo="text", text=hover_text,
                 lighting=dict(ambient=1, diffuse=0, specular=0, roughness=1, fresnel=0)))
-            # Bordes simples para el vidrio
             edges_x.extend([px0, px1, px1, px0, px0, None])
             edges_y.extend([py, py, py, py, py, None])
             edges_z.extend([pz0, pz0, pz1, pz1, pz0, None])
 
-        # CASCO Y ZÓCALOS
         dibujar_placa(x_base, x_base + espesor, y_base, prof, 0, alto, color_carcasa, "Lateral Izquierdo")
         dibujar_placa(x_base + ancho - espesor, x_base + ancho, y_base, prof, 0, alto, color_carcasa, "Lateral Derecho")
         dibujar_placa(x_base + espesor, x_base + ancho - espesor, y_base, prof, zocalo, zocalo + espesor, color_carcasa, "Piso")
@@ -257,7 +251,6 @@ with col_visual:
             y_trasero = prof - fondo_esp 
             dibujar_placa(x_base + espesor, x_base + ancho - espesor, y_trasero - 25 - espesor, y_trasero - 25, 0, zocalo, color_carcasa, "Zócalo Trasero")
 
-        # INTERIOR
         for i, modulos in enumerate(configuracion_columnas):
             col_x0 = x_base + espesor + i * (w_hueco + espesor)
             col_x1 = col_x0 + w_hueco
@@ -327,11 +320,11 @@ with col_visual:
                 p_y0 = y_base + 10 if h % 2 == 0 else y_base + 40
                 dibujar_plano_y(xh, xh + ancho_h_visual + 20, p_y0, zocalo + 5, alto - 5, "rgba(236, 240, 241, 0.7)", f"Hoja Corrediza {h+1}", 0.6)
 
-        # INYECCIÓN DE LÍNEAS NEGRAS AL FINAL
         fig.add_trace(go.Scatter3d(x=edges_x, y=edges_y, z=edges_z, mode='lines', line=dict(color='black', width=3), hoverinfo='skip', showlegend=False))
 
         no_axis = dict(showbackground=False, showgrid=False, zeroline=False, showticklabels=False, title="", visible=False)
         fig.update_layout(
+            uirevision="cam_state",
             scene=dict(xaxis=no_axis, yaxis=no_axis, zaxis=no_axis, aspectmode='data'),
             margin=dict(r=0, l=0, b=0, t=0), scene_camera=dict(eye=dict(x=1.6, y=-1.6, z=0.5)),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)"
@@ -339,9 +332,7 @@ with col_visual:
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         
     else:
-        # ==========================================
-        # MOTOR 2D (ELEVACIÓN FRONTAL Y COTAS)
-        # ==========================================
+        # MOTOR 2D
         fig2d = go.Figure()
         
         fig2d.add_annotation(x=ancho/2, y=alto+150, text=f"<b>{int(ancho)} mm</b>", showarrow=False, font=dict(size=14, color="black"))
@@ -498,26 +489,34 @@ if procesar:
             elif p["Cantos"] == "1L": m_canto_mm += p["Largo"] * p["Cant"]
         buy.append({"Item": f"Canto {tipo_canto}", "Cant": math.ceil((m_canto_mm/1000)*1.2), "Unidad": "m", "Costo": precio_canto})
 
-        t1, t2, t3 = st.tabs(["📝 Despiece", "🔩 Insumos", "✂️ Optimización de Placas"])
+        t1, t2, t3 = st.tabs(["📝 Despiece", "🔩 Insumos", "✂️ Optimización de Placas (Real)"])
         with t1: 
             df = pd.DataFrame(pz)
             st.dataframe(df.style.format({"Largo": "{:.0f}", "Ancho": "{:.0f}"}), use_container_width=True, hide_index=True)
-            st.download_button("📥 Exportar CSV para Corte", df.to_csv(index=False).encode(), "corte_v25_PRO.csv")
+            st.download_button("📥 Exportar CSV para Corte", df.to_csv(index=False).encode(), "corte_v25_CAM.csv")
         with t2: 
             st.dataframe(pd.DataFrame(buy).groupby(["Item","Unidad"], as_index=False).sum(), use_container_width=True, hide_index=True)
         with t3: 
-            st.markdown(f"**Placa Seleccionada:** {placa_largo} x {placa_ancho} mm")
+            # --- MOTOR DE NESTING EXACTO ---
+            esp_sierra = 4
+            refile_perimetral = 15
+            l_util = placa_largo - (refile_perimetral * 2)
+            a_util = placa_ancho - (refile_perimetral * 2)
             
-            # --- MOTOR DE NESTING (SHELF ALGORITHM) ---
+            st.markdown(f"**Geometría de Optimización:**")
+            st.caption(f"📏 Placa Bruta: {placa_largo}x{placa_ancho}mm | 📐 Área Útil (descontando 15mm refile): {l_util}x{a_util}mm | ⚙️ Sierra: {esp_sierra}mm")
+            
             piezas_opt = []
             for p in pz:
                 if "Mela" in p["Mat"]:
                     for _ in range(p["Cant"]):
-                        # Acostamos las piezas para la demo visual (Largo siempre en eje X)
-                        dim_x, dim_y = max(p["Largo"], p["Ancho"]), min(p["Largo"], p["Ancho"])
-                        piezas_opt.append({"nombre": p["Pieza"], "w": dim_x, "h": dim_y})
+                        # Respetar la veta para la gráfica (no rotar arbitrariamente)
+                        # Sumamos a cada pieza el espesor de la sierra para que el algoritmo reserve ese espacio
+                        dim_w = p["Largo"] + esp_sierra
+                        dim_h = p["Ancho"] + esp_sierra
+                        piezas_opt.append({"nombre": p["Pieza"], "w": dim_w, "h": dim_h, "w_real": p["Largo"], "h_real": p["Ancho"]})
             
-            # Ordenamos de mayor a menor para empaquetar mejor
+            # Ordenar por el lado más largo primero (para encajar mejor horizontalmente)
             piezas_opt.sort(key=lambda item: item["w"], reverse=True)
             
             placas_usadas = []
@@ -525,14 +524,13 @@ if procesar:
             current_x, current_y, shelf_h = 0, 0, 0
             
             for p in piezas_opt:
-                # Si no entra en el ancho de la placa, subimos a un estante nuevo
-                if current_x + p["w"] > placa_largo:
+                # El algoritmo ubica las piezas (sumadas con sus 4mm de sierra) dentro del área útil de la placa
+                if current_x + p["w"] > l_util:
                     current_x = 0
                     current_y += shelf_h
                     shelf_h = 0
                 
-                # Si supera el alto de la placa, necesitamos una placa nueva
-                if current_y + p["h"] > placa_ancho:
+                if current_y + p["h"] > a_util:
                     placas_usadas.append(current_placa)
                     current_placa = []
                     current_x, current_y, shelf_h = 0, 0, 0
@@ -540,33 +538,39 @@ if procesar:
                 if p["h"] > shelf_h:
                     shelf_h = p["h"]
                     
-                current_placa.append({"nombre": p["nombre"], "x": current_x, "y": current_y, "w": p["w"], "h": p["h"]})
+                current_placa.append({
+                    "nombre": p["nombre"], 
+                    "x": current_x, "y": current_y, 
+                    # Ancho y alto gráfico (sin la sierra para que en el dibujo se vea la luz de corte)
+                    "w_vis": p["w_real"], "h_vis": p["h_real"] 
+                })
                 current_x += p["w"]
                 
             if current_placa: placas_usadas.append(current_placa)
 
-            # RENDERIZADO DE PLACAS
-            st.success(f"Se calcularon **{len(placas_usadas)} placas** necesarias (Método de cálculo: Shelf Bin Packing).")
-            st.caption("*Nota: Es una aproximación visual interactiva. El operario de CNC utilizará su propio software para rotar vetas.*")
+            st.success(f"✔️ Se requieren **{len(placas_usadas)} placas** reales.")
+            st.info("*Nota técnica: Este es un algoritmo 'Shelf Bin Packing' que respeta las vetas originales. Un software CAM de CNC con rotación de piezas y algoritmo de guillotina podría comprimir los resultados un poco más.*")
             
             for idx, placa in enumerate(placas_usadas):
                 fig_board = go.Figure()
-                # Fondo de la placa
-                fig_board.add_shape(type="rect", x0=0, y0=0, x1=placa_largo, y1=placa_ancho, line=dict(color="#34495E", width=4), fillcolor="#EAECEE")
                 
-                # Piezas anidadas
+                # Fondo gris (Placa útil sin refile)
+                fig_board.add_shape(type="rect", x0=0, y0=0, x1=l_util, y1=a_util, line=dict(color="#34495E", width=3), fillcolor="#EAECEE")
+                
+                # Piezas
                 for pieza in placa:
                     px0, py0 = pieza["x"], pieza["y"]
-                    px1, py1 = px0 + pieza["w"], py0 + pieza["h"]
-                    fig_board.add_shape(type="rect", x0=px0, y0=py0, x1=px1, y1=py1, line=dict(color="#17202A", width=2), fillcolor="#F8C471")
-                    # Mostrar nombre en el centro de la pieza
-                    fig_board.add_annotation(x=px0+(pieza["w"]/2), y=py0+(pieza["h"]/2), text=pieza["nombre"], showarrow=False, font=dict(size=10, color="black"))
+                    px1, py1 = px0 + pieza["w_vis"], py0 + pieza["h_vis"]
+                    fig_board.add_shape(type="rect", x0=px0, y0=py0, x1=px1, y1=py1, line=dict(color="#17202A", width=1.5), fillcolor="#F5B041")
+                    # Nombre acortado para que entre bien
+                    txt = pieza["nombre"].split(" ")[0] + " " + pieza["nombre"].split(" ")[1] if " " in pieza["nombre"] else pieza["nombre"]
+                    fig_board.add_annotation(x=px0+(pieza["w_vis"]/2), y=py0+(pieza["h_vis"]/2), text=txt, showarrow=False, font=dict(size=10, color="black"))
                 
                 fig_board.update_layout(
-                    title=f"📐 Placa de Corte #{idx+1}",
-                    xaxis=dict(range=[-50, placa_largo+50], visible=False), 
-                    yaxis=dict(range=[-50, placa_ancho+50], visible=False, scaleanchor="x", scaleratio=1), 
-                    margin=dict(t=40, b=10, l=10, r=10), height=350, plot_bgcolor="white"
+                    title=dict(text=f"📐 Patrón de Corte - Placa #{idx+1}", font=dict(size=14)),
+                    xaxis=dict(range=[-50, l_util+50], visible=False), 
+                    yaxis=dict(range=[-50, a_util+50], visible=False, scaleanchor="x", scaleratio=1), 
+                    margin=dict(t=40, b=10, l=10, r=10), height=400, plot_bgcolor="white"
                 )
                 st.plotly_chart(fig_board, use_container_width=True, config={'displayModeBar': False})
             
