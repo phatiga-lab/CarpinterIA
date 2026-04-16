@@ -6,7 +6,7 @@ import math
 # ==============================================================================
 # CONFIGURACIÓN DE PÁGINA
 # ==============================================================================
-st.set_page_config(page_title="CarpinterIA V25 - CAM Veta", page_icon="🗄️", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="CarpinterIA V25 - CAM Pro 2.1", page_icon="🗄️", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
     <style>
@@ -366,12 +366,15 @@ st.markdown("---")
 col_b1, col_b2, col_b3 = st.columns([1, 2, 1])
 with col_b2:
     procesar = st.button("✂️ OPTIMIZAR CORTE Y PRESUPUESTO", type="primary", use_container_width=True)
-    placa_lisa = st.checkbox("🪵 Placa Lisa (Sin veta visible. Permite rotar TODAS las piezas para máximo ahorro)", value=False)
+    
+    # --- NUEVOS CHECKBOX DE OPTIMIZACION ---
+    c_op1, c_op2 = st.columns(2)
+    placa_lisa = c_op1.checkbox("🪵 Placa Lisa (Rota TODO libremente)", value=False)
+    forzar_opt = c_op2.checkbox("⚠️ Forzar Optimización (Sacrifica veta del Zócalo Frontal)", value=False)
 
 if procesar:
     pz = []; buy = []; err = []
     
-    # REGLA DE ORO DE LA VETA: "Largo" es SIEMPRE la medida que corre paralela a la veta.
     def add_p(nombre, cant, largo, ancho, veta, mat, nota=""):
         c = "-"
         if any(p in nombre for p in ["Frente", "Puerta", "Hoja", "Lat. Externo"]): c = "4L"
@@ -381,13 +384,15 @@ if procesar:
     prof_int = prof - 85 if tiene_placard else prof
     h_int = alto - zocalo - (espesor * 2); w_int = ancho - (espesor * 2)
     
-    # EXTERIORES (Veta Estricta)
+    # EXTERIORES
     add_p("Lat. Externo", 2, alto, prof, "Vertical", f"Mela {espesor}") 
     if zocalo > 0:
-        add_p("Zócalo Frontal", 1, w_int, zocalo, "Horizontal", f"Mela {espesor}", "Base")
-        add_p("Zócalo Trasero", 1, w_int, zocalo, "Horizontal", f"Mela {espesor}", "Base")
+        veta_z_front = "Libre" if forzar_opt else "Horizontal"
+        add_p("Zócalo Frontal", 1, w_int, zocalo, veta_z_front, f"Mela {espesor}", "Base")
+        # El trasero SIEMPRE es libre porque no se ve
+        add_p("Zócalo Trasero", 1, w_int, zocalo, "Libre", f"Mela {espesor}", "Base") 
 
-    # INTERIORES (Veta Libre -> Largo siempre es el máximo para que encastre mejor de entrada)
+    # INTERIORES (Veta Libre)
     add_p("Techo/Piso", 2, max(w_int, prof), min(w_int, prof), "Libre", f"Mela {espesor}")
     pz.append({"Pieza": "Fondo", "Cant": 1, "Largo": alto-15, "Ancho": ancho-15, "Veta": "Libre", "Mat": f"Fibro {fondo_esp}", "Cantos": "-", "Nota": ""})
     
@@ -414,7 +419,6 @@ if procesar:
                 cant = data.get("cant", 0); 
                 if cant > 0:
                     hf = (h_util - ((cant-1)*3)) / cant
-                    
                     if "Vertical" in veta_frentes:
                         add_p(f"Frente Cajón C{i+1}-M{m+1}", cant, hf, w_hueco-4, "Vertical", f"Mela {espesor}")
                     else:
@@ -478,7 +482,7 @@ if procesar:
             elif p["Cantos"] == "1L": m_canto_mm += p["Largo"] * p["Cant"]
         buy.append({"Item": f"Canto {tipo_canto}", "Cant": math.ceil((m_canto_mm/1000)*1.2), "Unidad": "m", "Costo": precio_canto})
 
-        t1, t2, t3 = st.tabs(["📝 Despiece", "🔩 Insumos", "✂️ Optimización de Placas (Pro)"])
+        t1, t2, t3 = st.tabs(["📝 Despiece", "🔩 Insumos", "✂️ Optimización de Placas"])
         with t1: 
             df = pd.DataFrame(pz)
             st.dataframe(df.style.format({"Largo": "{:.0f}", "Ancho": "{:.0f}"}), use_container_width=True, hide_index=True)
@@ -487,7 +491,6 @@ if procesar:
             st.dataframe(pd.DataFrame(buy).groupby(["Item","Unidad"], as_index=False).sum(), use_container_width=True, hide_index=True)
         with t3: 
             
-            # --- MOTOR DE NESTING: GUILLOTINE SPLIT INTELIGENTE ---
             class PlacaOptimizada:
                 def __init__(self, w, h):
                     self.w = w
@@ -501,9 +504,7 @@ if procesar:
                     best_node = None
                     is_rot = False
 
-                    # Busca el hueco perfecto
                     for i, rect in enumerate(self.free_rects):
-                        # 1. Intento sin rotar (Respetando el Largo de la pieza sobre el Largo de la placa)
                         if pw <= rect["w"] and ph <= rect["h"]:
                             score = min(rect["w"] - pw, rect["h"] - ph)
                             if score < best_score:
@@ -511,7 +512,6 @@ if procesar:
                                 best_node = {"x": rect["x"], "y": rect["y"], "w": pw, "h": ph}
                                 is_rot = False
                         
-                        # 2. Intento rotado (Solo si la pieza o el usuario lo permiten)
                         if can_rotate and ph <= rect["w"] and pw <= rect["h"]:
                             score = min(rect["w"] - ph, rect["h"] - pw)
                             if score < best_score:
@@ -521,8 +521,6 @@ if procesar:
 
                     if best_node:
                         rect = self.free_rects.pop(best_rect_idx)
-                        
-                        # División de guillotina del espacio sobrante
                         w_r1, h_r1 = rect["w"] - best_node["w"], best_node["h"]
                         w_t1, h_t1 = rect["w"], rect["h"] - best_node["h"]
                         w_r2, h_r2 = rect["w"] - best_node["w"], rect["h"]
@@ -551,7 +549,6 @@ if procesar:
             for p in pz:
                 if "Mela" in p["Mat"]:
                     for _ in range(p["Cant"]):
-                        # Lógica de Veta: Si es placa lisa, se rota todo. Si no, solo se rotan las piezas internas ("Libre")
                         rotacion_permitida = placa_lisa or (p["Veta"] == "Libre")
                         piezas_opt.append({
                             "nombre": p["Pieza"], 
@@ -560,8 +557,9 @@ if procesar:
                             "can_rotate": rotacion_permitida
                         })
             
-            # Ordenar por área para asegurar que las más grandes (Techos, Laterales) encajen primero
-            piezas_opt.sort(key=lambda item: item["w"] * item["h"], reverse=True)
+            # EL TRUCO ESTÁ ACÁ: Ahora se ordena primando el lado más largo. 
+            # Esto mete las "tiras" (zócalos, barrales, laterales) antes de que la placa se llene de retazos.
+            piezas_opt.sort(key=lambda item: (max(item["w"], item["h"]), min(item["w"], item["h"])), reverse=True)
             
             placas_usadas = []
 
@@ -577,10 +575,7 @@ if procesar:
                     nueva_placa.insertar(p["w"], p["h"], p["nombre"], p["can_rotate"])
                     placas_usadas.append(nueva_placa)
 
-            if placa_lisa:
-                st.success(f"✔️ Modo Placa Lisa: Se requirieron **{len(placas_usadas)} placas** reales.")
-            else:
-                st.success(f"✔️ Modo Veta Inteligente (Exteriores bloqueados, interiores libres): Se requirieron **{len(placas_usadas)} placas** reales.")
+            st.success(f"✔️ Optimizado con Guillotina Inteligente. Se requirieron **{len(placas_usadas)} placas** reales.")
             
             for idx, placa in enumerate(placas_usadas):
                 fig_board = go.Figure()
@@ -590,7 +585,6 @@ if procesar:
                     px0, py0 = pieza["x"], pieza["y"]
                     px1, py1 = px0 + pieza["w"] - esp_sierra, py0 + pieza["h"] - esp_sierra
                     
-                    # Distinguimos visualmente si el algoritmo la rotó
                     color_p = "#E67E22" if pieza["rotada"] else "#F5B041"
                     
                     fig_board.add_shape(type="rect", x0=px0, y0=py0, x1=px1, y1=py1, line=dict(color="#17202A", width=1.5), fillcolor=color_p)
@@ -600,7 +594,7 @@ if procesar:
                     fig_board.add_annotation(x=px0+((px1-px0)/2), y=py0+((py1-py0)/2), text=txt, showarrow=False, font=dict(size=10, color="black"))
                 
                 fig_board.update_layout(
-                    title=dict(text=f"📐 Patrón de Corte - Placa #{idx+1} (Guillotina Inteligente)", font=dict(size=14)),
+                    title=dict(text=f"📐 Patrón de Corte - Placa #{idx+1}", font=dict(size=14)),
                     xaxis=dict(range=[-50, l_util+50], visible=False), 
                     yaxis=dict(range=[-50, a_util+50], visible=False, scaleanchor="x", scaleratio=1), 
                     margin=dict(t=40, b=10, l=10, r=10), height=400, plot_bgcolor="white"
