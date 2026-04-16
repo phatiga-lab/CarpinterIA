@@ -6,7 +6,7 @@ import math
 # ==============================================================================
 # CONFIGURACIÓN DE PÁGINA
 # ==============================================================================
-st.set_page_config(page_title="CarpinterIA V25 - PRO", page_icon="🗄️", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="CarpinterIA V25 - CAM", page_icon="🗄️", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
     <style>
@@ -49,7 +49,6 @@ with st.sidebar:
         espesor = st.selectbox("Espesor Estructural", [18, 15], index=0)
         fondo_esp = st.selectbox("Espesor Fondo", [3, 5.5, 18], index=0)
         
-        # --- NUEVO: SELECTOR DE PLACA ---
         formato_placa = st.selectbox("Formato de Placa (Melamina)", ["2750 x 1830 mm (Estándar Faplac)", "2600 x 1830 mm (Sadepan)", "2800 x 2070 mm (Egger)", "Personalizada..."])
         if "Personalizada" in formato_placa:
             c1_p, c2_p = st.columns(2)
@@ -58,7 +57,6 @@ with st.sidebar:
         else:
             placa_largo = int(formato_placa.split("x")[0].strip())
             placa_ancho = int(formato_placa.split("x")[1].split("mm")[0].strip())
-        # --------------------------------
         
         tipo_canto = st.selectbox("Tipo de Canto", ["Melamínico 0.45mm", "PVC 0.45mm", "PVC 2mm ABS"], index=1)
         zocalo = st.number_input("Altura Zócalo (mm)", value=70, step=5)
@@ -196,14 +194,12 @@ with col_controles:
 # ZONA DERECHA: VISUALIZADOR 2D / 3D
 # ------------------------------------------------------------------------------
 with col_visual:
-    # --- NUEVO: SELECTOR DE VISTA ---
     c_v1, c_v2 = st.columns([1, 1])
     with c_v1:
         st.header("👁️ Previsualización")
     with c_v2:
         modo_vista = st.radio("Modo", ["📐 Planos 2D (Cotas)", "📦 Render 3D"], horizontal=True, label_visibility="collapsed")
     
-    # Lógica de Variables Compartidas
     w_int = ancho - (espesor * 2)
     w_hueco = (w_int - ((cant_columnas - 1) * espesor)) / cant_columnas
     x_base = -ancho / 2
@@ -212,7 +208,7 @@ with col_visual:
     
     if "3D" in modo_vista:
         # ==========================================
-        # MOTOR 3D
+        # MOTOR 3D (AHORA CON LÍNEAS DE CONTORNO)
         # ==========================================
         fig = go.Figure()
         
@@ -221,6 +217,14 @@ with col_visual:
         color_cajones = "#2874A6" 
         color_frentes = "#85C1E9" 
         
+        # Vectores globales para dibujar todas las líneas negras de una sola vez (super eficiente)
+        edges_x, edges_y, edges_z = [], [], []
+
+        def track_edges(x0, x1, y0, y1, z0, z1):
+            edges_x.extend([x0, x1, x1, x0, x0, None, x0, x1, x1, x0, x0, None, x0, x0, None, x1, x1, None, x1, x1, None, x0, x0, None])
+            edges_y.extend([y0, y0, y1, y1, y0, None, y0, y0, y1, y1, y0, None, y0, y0, None, y0, y0, None, y1, y1, None, y1, y1, None])
+            edges_z.extend([z0, z0, z0, z0, z0, None, z1, z1, z1, z1, z1, None, z0, z1, None, z0, z1, None, z0, z1, None, z0, z1, None])
+
         def dibujar_placa(x0, x1, y0, y1, z0, z1, color, nombre):
             dim_x = int(abs(x1 - x0)); dim_y = int(abs(y1 - y0)); dim_z = int(abs(z1 - z0))
             hover_text = f"<b>{nombre}</b><br>{dim_x} x {dim_y} x {dim_z} mm"
@@ -228,6 +232,7 @@ with col_visual:
                 i=[7,0,0,0,4,4,3,3,7,2,6,6], j=[3,4,1,2,5,6,2,3,6,7,1,2], k=[0,7,2,3,6,7,1,0,2,5,5,1],
                 opacity=1, color=color, flatshading=True, name=nombre, hoverinfo="text", text=hover_text,
                 lighting=dict(ambient=1, diffuse=0, specular=0, roughness=1, fresnel=0))) 
+            track_edges(x0, x1, y0, y1, z0, z1)
 
         def dibujar_plano_y(px0, px1, py, pz0, pz1, color, nombre, opacidad=0.5):
             dim_x = int(abs(px1 - px0)); dim_y = 18; dim_z = int(abs(pz1 - pz0)) 
@@ -235,6 +240,10 @@ with col_visual:
             fig.add_trace(go.Mesh3d(x=[px0, px1, px1, px0], y=[py, py, py, py], z=[pz0, pz0, pz1, pz1],
                 i=[0, 0], j=[1, 2], k=[2, 3], opacity=opacidad, color=color, name=nombre, hoverinfo="text", text=hover_text,
                 lighting=dict(ambient=1, diffuse=0, specular=0, roughness=1, fresnel=0)))
+            # Bordes simples para el vidrio
+            edges_x.extend([px0, px1, px1, px0, px0, None])
+            edges_y.extend([py, py, py, py, py, None])
+            edges_z.extend([pz0, pz0, pz1, pz1, pz0, None])
 
         # CASCO Y ZÓCALOS
         dibujar_placa(x_base, x_base + espesor, y_base, prof, 0, alto, color_carcasa, "Lateral Izquierdo")
@@ -318,9 +327,11 @@ with col_visual:
                 p_y0 = y_base + 10 if h % 2 == 0 else y_base + 40
                 dibujar_plano_y(xh, xh + ancho_h_visual + 20, p_y0, zocalo + 5, alto - 5, "rgba(236, 240, 241, 0.7)", f"Hoja Corrediza {h+1}", 0.6)
 
+        # INYECCIÓN DE LÍNEAS NEGRAS AL FINAL
+        fig.add_trace(go.Scatter3d(x=edges_x, y=edges_y, z=edges_z, mode='lines', line=dict(color='black', width=3), hoverinfo='skip', showlegend=False))
+
         no_axis = dict(showbackground=False, showgrid=False, zeroline=False, showticklabels=False, title="", visible=False)
         fig.update_layout(
-            uirevision="cam_state", # MAGIA: Evita que la cámara se resetee con cada cambio.
             scene=dict(xaxis=no_axis, yaxis=no_axis, zaxis=no_axis, aspectmode='data'),
             margin=dict(r=0, l=0, b=0, t=0), scene_camera=dict(eye=dict(x=1.6, y=-1.6, z=0.5)),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)"
@@ -333,7 +344,6 @@ with col_visual:
         # ==========================================
         fig2d = go.Figure()
         
-        # Cotas Exteriores (Alto y Ancho)
         fig2d.add_annotation(x=ancho/2, y=alto+150, text=f"<b>{int(ancho)} mm</b>", showarrow=False, font=dict(size=14, color="black"))
         fig2d.add_shape(type="line", x0=0, y0=alto+100, x1=ancho, y1=alto+100, line=dict(color="black", width=1))
         fig2d.add_shape(type="line", x0=0, y0=alto+80, x1=0, y1=alto+120, line=dict(color="black", width=1))
@@ -344,41 +354,35 @@ with col_visual:
         fig2d.add_shape(type="line", x0=-80, y0=0, x1=-120, y1=0, line=dict(color="black", width=1))
         fig2d.add_shape(type="line", x0=-80, y0=alto, x1=-120, y1=alto, line=dict(color="black", width=1))
 
-        # Casco Base
-        fig2d.add_shape(type="rect", x0=0, y0=0, x1=espesor, y1=alto, fillcolor="#5D4037", line=dict(width=0)) # Lat Izq
-        fig2d.add_shape(type="rect", x0=ancho-espesor, y0=0, x1=ancho, y1=alto, fillcolor="#5D4037", line=dict(width=0)) # Lat Der
-        fig2d.add_shape(type="rect", x0=espesor, y0=alto-espesor, x1=ancho-espesor, y1=alto, fillcolor="#5D4037", line=dict(width=0)) # Techo
-        fig2d.add_shape(type="rect", x0=espesor, y0=zocalo, x1=ancho-espesor, y1=zocalo+espesor, fillcolor="#5D4037", line=dict(width=0)) # Piso
+        fig2d.add_shape(type="rect", x0=0, y0=0, x1=espesor, y1=alto, fillcolor="#5D4037", line=dict(width=0)) 
+        fig2d.add_shape(type="rect", x0=ancho-espesor, y0=0, x1=ancho, y1=alto, fillcolor="#5D4037", line=dict(width=0)) 
+        fig2d.add_shape(type="rect", x0=espesor, y0=alto-espesor, x1=ancho-espesor, y1=alto, fillcolor="#5D4037", line=dict(width=0)) 
+        fig2d.add_shape(type="rect", x0=espesor, y0=zocalo, x1=ancho-espesor, y1=zocalo+espesor, fillcolor="#5D4037", line=dict(width=0)) 
         
         if zocalo > 0:
             fig2d.add_shape(type="rect", x0=espesor, y0=0, x1=ancho-espesor, y1=zocalo, fillcolor="#BFC9CA", line=dict(width=0))
             fig2d.add_annotation(x=ancho/2, y=zocalo/2, text=f"Zócalo: {int(zocalo)}mm", showarrow=False, font=dict(color="white", size=10))
 
-        # Interior 2D
         for i, modulos in enumerate(configuracion_columnas):
             x_col = espesor + i * (w_hueco + espesor)
             if i < cant_columnas - 1:
                 fig2d.add_shape(type="rect", x0=x_col+w_hueco, y0=zocalo+espesor, x1=x_col+w_hueco+espesor, y1=alto-espesor, fillcolor="#5D4037", line=dict(width=0))
             
-            # Cota Ancho Hueco
             fig2d.add_annotation(x=x_col+(w_hueco/2), y=alto-espesor-30, text=f"W: {int(w_hueco)}", showarrow=False, font=dict(color="white", size=10), bgcolor="#2C3E50")
 
             y_curr = zocalo + espesor
             for m, mod in enumerate(modulos):
                 h_mod = mod["alto"]; h_util = mod["h_util"]; tipo = mod["tipo"]
                 
-                # Estante Fijo horizontal
                 if m < len(modulos) - 1:
                     fig2d.add_shape(type="rect", x0=x_col, y0=y_curr+h_util, x1=x_col+w_hueco, y1=y_curr+h_util+espesor, fillcolor="#5D4037", line=dict(width=0))
                 
-                # Contenido visual
                 if tipo == "Cajonera" and mod["data"].get("cant", 0) > 0:
                     c = mod["data"]["cant"]; hu = h_util / c
                     for k in range(c): fig2d.add_shape(type="rect", x0=x_col+2, y0=y_curr+(k*hu)+2, x1=x_col+w_hueco-2, y1=y_curr+((k+1)*hu)-2, fillcolor="#AED6F1", line=dict(color="#2874A6"))
                 elif tipo == "Puerta":
                     fig2d.add_shape(type="rect", x0=x_col+2, y0=y_curr+2, x1=x_col+w_hueco-2, y1=y_curr+h_util-2, fillcolor="rgba(133, 193, 233, 0.4)", line=dict(color="#85C1E9", width=2))
                 
-                # Etiqueta Central Alto
                 fig2d.add_annotation(x=x_col+w_hueco/2, y=y_curr+h_util/2, text=f"<b>H: {int(h_util)}</b><br>{tipo}", showarrow=False, font=dict(color="#5D6D7E", size=11))
                 y_curr += h_mod
 
@@ -395,7 +399,6 @@ with col_visual:
 st.markdown("---")
 col_b1, col_b2, col_b3 = st.columns([1, 2, 1])
 with col_b2:
-    # --- NUEVO: BOTÓN DE OPTIMIZACIÓN ---
     procesar = st.button("✂️ OPTIMIZAR CORTE Y PRESUPUESTO", type="primary", use_container_width=True)
 
 if procesar:
@@ -489,14 +492,13 @@ if procesar:
         for e in err: st.error(e)
     else:
         buy.insert(0, {"Item": "Tornillos 4x50", "Cant": len(pz)*4, "Unidad": "u.", "Costo": 10})
-        
         m_canto_mm = 0
         for p in pz:
             if p["Cantos"] == "4L": m_canto_mm += (p["Largo"]*2 + p["Ancho"]*2) * p["Cant"]
             elif p["Cantos"] == "1L": m_canto_mm += p["Largo"] * p["Cant"]
         buy.append({"Item": f"Canto {tipo_canto}", "Cant": math.ceil((m_canto_mm/1000)*1.2), "Unidad": "m", "Costo": precio_canto})
 
-        t1, t2, t3 = st.tabs(["📝 Despiece", "🔩 Insumos", "💰 Optimización de Placas"])
+        t1, t2, t3 = st.tabs(["📝 Despiece", "🔩 Insumos", "✂️ Optimización de Placas"])
         with t1: 
             df = pd.DataFrame(pz)
             st.dataframe(df.style.format({"Largo": "{:.0f}", "Ancho": "{:.0f}"}), use_container_width=True, hide_index=True)
@@ -504,18 +506,70 @@ if procesar:
         with t2: 
             st.dataframe(pd.DataFrame(buy).groupby(["Item","Unidad"], as_index=False).sum(), use_container_width=True, hide_index=True)
         with t3: 
-            # --- NUEVO: CÁLCULO INTELIGENTE DE PLACAS ---
-            area_placa_m2 = (placa_largo * placa_ancho) / 1_000_000
-            area_piezas_m2 = sum([p["Largo"] * p["Ancho"] * p["Cant"] for p in pz if "Mela" in p["Mat"]]) / 1_000_000
+            st.markdown(f"**Placa Seleccionada:** {placa_largo} x {placa_ancho} mm")
             
-            # 25% de margen térmico/desperdicio de corte
-            placas = math.ceil((area_piezas_m2 * 1.25) / area_placa_m2) 
+            # --- MOTOR DE NESTING (SHELF ALGORITHM) ---
+            piezas_opt = []
+            for p in pz:
+                if "Mela" in p["Mat"]:
+                    for _ in range(p["Cant"]):
+                        # Acostamos las piezas para la demo visual (Largo siempre en eje X)
+                        dim_x, dim_y = max(p["Largo"], p["Ancho"]), min(p["Largo"], p["Ancho"])
+                        piezas_opt.append({"nombre": p["Pieza"], "w": dim_x, "h": dim_y})
             
-            c_mat = (placas * precio_placa)
+            # Ordenamos de mayor a menor para empaquetar mejor
+            piezas_opt.sort(key=lambda item: item["w"], reverse=True)
+            
+            placas_usadas = []
+            current_placa = []
+            current_x, current_y, shelf_h = 0, 0, 0
+            
+            for p in piezas_opt:
+                # Si no entra en el ancho de la placa, subimos a un estante nuevo
+                if current_x + p["w"] > placa_largo:
+                    current_x = 0
+                    current_y += shelf_h
+                    shelf_h = 0
+                
+                # Si supera el alto de la placa, necesitamos una placa nueva
+                if current_y + p["h"] > placa_ancho:
+                    placas_usadas.append(current_placa)
+                    current_placa = []
+                    current_x, current_y, shelf_h = 0, 0, 0
+                    
+                if p["h"] > shelf_h:
+                    shelf_h = p["h"]
+                    
+                current_placa.append({"nombre": p["nombre"], "x": current_x, "y": current_y, "w": p["w"], "h": p["h"]})
+                current_x += p["w"]
+                
+            if current_placa: placas_usadas.append(current_placa)
+
+            # RENDERIZADO DE PLACAS
+            st.success(f"Se calcularon **{len(placas_usadas)} placas** necesarias (Método de cálculo: Shelf Bin Packing).")
+            st.caption("*Nota: Es una aproximación visual interactiva. El operario de CNC utilizará su propio software para rotar vetas.*")
+            
+            for idx, placa in enumerate(placas_usadas):
+                fig_board = go.Figure()
+                # Fondo de la placa
+                fig_board.add_shape(type="rect", x0=0, y0=0, x1=placa_largo, y1=placa_ancho, line=dict(color="#34495E", width=4), fillcolor="#EAECEE")
+                
+                # Piezas anidadas
+                for pieza in placa:
+                    px0, py0 = pieza["x"], pieza["y"]
+                    px1, py1 = px0 + pieza["w"], py0 + pieza["h"]
+                    fig_board.add_shape(type="rect", x0=px0, y0=py0, x1=px1, y1=py1, line=dict(color="#17202A", width=2), fillcolor="#F8C471")
+                    # Mostrar nombre en el centro de la pieza
+                    fig_board.add_annotation(x=px0+(pieza["w"]/2), y=py0+(pieza["h"]/2), text=pieza["nombre"], showarrow=False, font=dict(size=10, color="black"))
+                
+                fig_board.update_layout(
+                    title=f"📐 Placa de Corte #{idx+1}",
+                    xaxis=dict(range=[-50, placa_largo+50], visible=False), 
+                    yaxis=dict(range=[-50, placa_ancho+50], visible=False, scaleanchor="x", scaleratio=1), 
+                    margin=dict(t=40, b=10, l=10, r=10), height=350, plot_bgcolor="white"
+                )
+                st.plotly_chart(fig_board, use_container_width=True, config={'displayModeBar': False})
+            
+            c_mat = (len(placas_usadas) * precio_placa)
             c_herr = sum([c["Costo"]*c["Cant"] for c in buy])
-            
-            st.info(f"📐 **Placa Seleccionada:** {placa_largo} x {placa_ancho} mm ({area_placa_m2:.2f} m²)")
-            st.write(f"- Área total de piezas a cortar: **{area_piezas_m2:.2f} m²**")
-            st.write(f"- Melamina necesaria (con 25% desp.): **~{placas} placas** (${c_mat:,.0f})")
-            st.write(f"- Total Insumos (Herrajes/Cantos): **${c_herr:,.0f}**")
             st.metric("PRECIO SUGERIDO DE VENTA", f"${(c_mat + c_herr) * margen:,.0f}")
