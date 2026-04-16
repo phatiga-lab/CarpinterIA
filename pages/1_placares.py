@@ -6,7 +6,7 @@ import math
 # ==============================================================================
 # CONFIGURACIÓN DE PÁGINA
 # ==============================================================================
-st.set_page_config(page_title="CarpinterIA V25 - 3D Clean", page_icon="🗄️", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="CarpinterIA V25 - 3D Pro", page_icon="🗄️", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
     <style>
@@ -181,7 +181,7 @@ with col_controles:
             configuracion_columnas.append(modulos_columna)
 
 # ------------------------------------------------------------------------------
-# ZONA DERECHA: VISUALIZADOR 3D 
+# ZONA DERECHA: VISUALIZADOR 3D (RESCATADO Y ESTRUCTURALMENTE CORRECTO)
 # ------------------------------------------------------------------------------
 with col_visual:
     st.header("👁️ Vista Previa 3D")
@@ -198,7 +198,9 @@ with col_visual:
         hover_text = f"<b>{nombre}</b><br>{dim_x} x {dim_y} x {dim_z} mm"
         fig.add_trace(go.Mesh3d(x=[x0,x1,x1,x0,x0,x1,x1,x0], y=[y0,y0,y1,y1,y0,y0,y1,y1], z=[z0,z0,z0,z0,z1,z1,z1,z1],
             i=[7,0,0,0,4,4,3,3,7,2,6,6], j=[3,4,1,2,5,6,2,3,6,7,1,2], k=[0,7,2,3,6,7,1,0,2,5,5,1],
-            opacity=1, color=color, flatshading=True, name=nombre, hoverinfo="text", text=hover_text)) 
+            opacity=1, color=color, flatshading=True, name=nombre, hoverinfo="text", text=hover_text,
+            # SOLUCIÓN: Iluminación plana para eliminar triángulos en TODOS los bloques
+            lighting=dict(ambient=1, diffuse=0, specular=0, roughness=1, fresnel=0))) 
 
     def dibujar_plano_y(px0, px1, py, pz0, pz1, color, nombre, opacidad=0.5):
         dim_x = int(abs(px1 - px0)); dim_y = 18; dim_z = int(abs(pz1 - pz0)) 
@@ -209,7 +211,6 @@ with col_visual:
             z=[pz0, pz0, pz1, pz1],
             i=[0, 0], j=[1, 2], k=[2, 3], 
             opacity=opacidad, color=color, name=nombre, hoverinfo="text", text=hover_text,
-            # ESTO ELIMINA EL EFECTO TRIANGULO DE LAS TRANSPARENCIAS
             lighting=dict(ambient=1, diffuse=0, specular=0, roughness=1, fresnel=0) 
         ))
 
@@ -217,18 +218,25 @@ with col_visual:
     y_base = 0 
     prof_int = prof - 85 if tiene_placard else prof
     
-    # CASCO
-    dibujar_placa(x_base, x_base + espesor, y_base, prof, zocalo, alto, color_carcasa, "Lateral Izquierdo")
-    dibujar_placa(x_base + ancho - espesor, x_base + ancho, y_base, prof, zocalo, alto, color_carcasa, "Lateral Derecho")
+    # 1. CASCO Y ZÓCALOS (Lógica constructiva corregida)
+    # Laterales van hasta el piso real (Z=0)
+    dibujar_placa(x_base, x_base + espesor, y_base, prof, 0, alto, color_carcasa, "Lateral Izquierdo")
+    dibujar_placa(x_base + ancho - espesor, x_base + ancho, y_base, prof, 0, alto, color_carcasa, "Lateral Derecho")
+    
+    # Piso y Techo contenidos entre los laterales
     dibujar_placa(x_base + espesor, x_base + ancho - espesor, y_base, prof, zocalo, zocalo + espesor, color_carcasa, "Piso")
     dibujar_placa(x_base + espesor, x_base + ancho - espesor, y_base, prof, alto - espesor, alto, color_carcasa, "Techo")
+    
+    # Fondo
     dibujar_placa(x_base + espesor, x_base + ancho - espesor, prof - fondo_esp, prof, zocalo + espesor, alto - espesor, "#D2B48C", "Fondo")
     
+    # Zócalos retraídos
     if zocalo > 0:
-        dibujar_placa(x_base + espesor, x_base + ancho - espesor, y_base, y_base + espesor, 0, zocalo, color_carcasa, "Zócalo Frontal")
-        dibujar_placa(x_base + espesor, x_base + ancho - espesor, prof - espesor, prof, 0, zocalo, color_carcasa, "Zócalo Trasero")
+        dibujar_placa(x_base + espesor, x_base + ancho - espesor, y_base + 25, y_base + 25 + espesor, 0, zocalo, color_carcasa, "Zócalo Frontal")
+        y_trasero = prof - fondo_esp # Borde donde termina la base (antes del fondo)
+        dibujar_placa(x_base + espesor, x_base + ancho - espesor, y_trasero - 25 - espesor, y_trasero - 25, 0, zocalo, color_carcasa, "Zócalo Trasero")
 
-    # INTERIOR
+    # 2. INTERIOR
     w_int = ancho - (espesor * 2)
     w_hueco = (w_int - ((cant_columnas - 1) * espesor)) / cant_columnas
     
@@ -331,9 +339,7 @@ if procesar:
     
     def add_p(nombre, cant, largo, ancho, veta, mat, nota=""):
         c = "-"
-        # Laterales externos ahora están en el grupo de 4L
         if any(p in nombre for p in ["Frente", "Puerta", "Hoja", "Lat. Externo"]): c = "4L"
-        # Divisores (tabiques) siguen en el grupo de 1L
         elif any(p in nombre for p in ["Techo", "Piso", "Estante", "Divisor", "Zócalo", "Contra-Frente", "Lat. Cajón"]): c = "1L"
         
         pz.append({"Pieza": nombre, "Cant": cant, "Largo": largo, "Ancho": ancho, "Veta": veta, "Mat": mat, "Cantos": c, "Nota": nota})
@@ -344,7 +350,6 @@ if procesar:
     add_p("Lat. Externo", 2, alto, prof, "↕️", f"Mela {espesor}") 
     add_p("Techo/Piso", 2, w_int, prof, "↔️", f"Mela {espesor}")
     
-    # ZÓCALOS INCORPORADOS
     if zocalo > 0:
         add_p("Zócalo Frontal", 1, w_int, zocalo, "↔️", f"Mela {espesor}", "Base")
         add_p("Zócalo Trasero", 1, w_int, zocalo, "↔️", f"Mela {espesor}", "Base")
