@@ -6,7 +6,7 @@ import math
 # ==============================================================================
 # CONFIGURACIÓN DE PÁGINA
 # ==============================================================================
-st.set_page_config(page_title="CarpinterIA V25 - CAM Veta Pro", page_icon="🗄️", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="CarpinterIA V25 - CAM Veta Exacta", page_icon="🗄️", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
     <style>
@@ -59,7 +59,7 @@ with st.sidebar:
             placa_ancho = int(formato_placa.split("x")[1].split("mm")[0].strip())
         
         tipo_canto = st.selectbox("Tipo de Canto", ["Melamínico 0.45mm", "PVC 0.45mm", "PVC 2mm ABS"], index=1)
-        veta_frentes = st.radio("Veta Visual Frentes y Puertas", ["Vertical", "Horizontal"], index=0)
+        veta_frentes = st.radio("Veta Visual Frentes y Puertas", ["↔️ Horizontal (Alineada al Techo)", "↕️ Vertical"], index=0)
         zocalo = st.number_input("Altura Zócalo (mm)", value=70, step=5)
 
     with st.expander("🔩 2. Herrajes Estándar", expanded=False):
@@ -368,21 +368,25 @@ if procesar:
     pz = []; buy = []; err = []
     
     # REGLA ESTRICTA: El parámetro 'Largo' ES el eje de la veta de la pieza.
-    def add_p(nombre, cant, largo, ancho, veta, mat, nota=""):
+    # El eje X del dibujo de la placa es la dirección de la veta.
+    def add_p(nombre, cant, largo_veta, ancho_contra_veta, veta, mat, nota=""):
         c = "-"
         if any(p in nombre for p in ["Frente", "Puerta", "Hoja", "Lat. Externo"]): c = "4L"
         elif any(p in nombre for p in ["Techo", "Piso", "Estante", "Divisor", "Zócalo", "Contra-Frente", "Lat. Cajón"]): c = "1L"
-        pz.append({"Pieza": nombre, "Cant": cant, "Largo": largo, "Ancho": ancho, "Veta": veta, "Mat": mat, "Cantos": c, "Nota": nota})
+        pz.append({"Pieza": nombre, "Cant": cant, "Largo": largo_veta, "Ancho": ancho_contra_veta, "Veta": veta, "Mat": mat, "Cantos": c, "Nota": nota})
 
     prof_int = prof - 85 if tiene_placard else prof
     h_int = alto - zocalo - (espesor * 2); w_int = ancho - (espesor * 2)
     
     # EXTERIORES Y ESTRUCTURALES
+    # Lateral: La veta corre de arriba hacia abajo (alto)
     add_p("Lat. Externo", 2, alto, prof, "Estricto", f"Mela {espesor}") 
+    # Techo/Piso: La veta corre de izquierda a derecha (ancho del mueble)
     add_p("Techo/Piso", 2, w_int, prof, "Estricto", f"Mela {espesor}")
     
     if zocalo > 0:
         veta_zf = "Libre" if forzar_opt else "Estricto"
+        # Zócalo Frontal: La veta corre de izquierda a derecha (ancho del mueble)
         add_p("Zócalo Frontal", 1, w_int, zocalo, veta_zf, f"Mela {espesor}", "Base")
         # El trasero siempre libre porque no se ve
         add_p("Zócalo Trasero", 1, w_int, zocalo, "Libre", f"Mela {espesor}", "Base")
@@ -390,6 +394,7 @@ if procesar:
     pz.append({"Pieza": "Fondo", "Cant": 1, "Largo": alto-15, "Ancho": ancho-15, "Veta": "Libre", "Mat": f"Fibro {fondo_esp}", "Cantos": "-", "Nota": ""})
     
     if cant_columnas > 1: 
+        # Divisor Vertical: La veta corre de arriba hacia abajo (alto interno)
         add_p("Divisor Vert", cant_columnas-1, h_int, prof_int, "Estricto", f"Mela {espesor}")
         
     w_hueco = (w_int - ((cant_columnas - 1) * espesor)) / cant_columnas
@@ -397,10 +402,12 @@ if procesar:
     if tiene_placard:
         h_hoja = alto - zocalo - 40
         w_hoja = (w_int + ((hojas_placard - 1) * 30)) / hojas_placard
-        if "Vertical" in veta_frentes:
-            add_p("Hoja Corrediza", hojas_placard, h_hoja, w_hoja, "Estricto", f"Mela {espesor}", "Kit Placard")
-        else:
+        if "Horizontal" in veta_frentes:
+            # Veta de izquierda a derecha (ancho de hoja)
             add_p("Hoja Corrediza", hojas_placard, w_hoja, h_hoja, "Estricto", f"Mela {espesor}", "Kit Placard")
+        else:
+            # Veta de arriba a abajo (alto de hoja)
+            add_p("Hoja Corrediza", hojas_placard, h_hoja, w_hoja, "Estricto", f"Mela {espesor}", "Kit Placard")
         buy.append({"Item": "Kit Corredizo (Rieles)", "Cant": ancho/1000, "Unidad": "ml", "Costo": c_kit})
 
     veta_estantes = "Libre" if forzar_opt else "Estricto"
@@ -410,6 +417,7 @@ if procesar:
             tipo = mod["tipo"]; data = mod["data"]; h_util = mod["h_util"]
             
             if m < len(modulos) - 1:
+                # Estante Fijo: Veta de izquierda a derecha (ancho del hueco)
                 add_p(f"Estante Fijo C{i+1}-M{m+1}", 1, w_hueco, prof_int, veta_estantes, f"Mela {espesor}", "Estructural")
 
             if tipo == "Cajonera":
@@ -417,10 +425,12 @@ if procesar:
                 if cant > 0:
                     hf = (h_util - ((cant-1)*3)) / cant
                     
-                    if "Vertical" in veta_frentes:
-                        add_p(f"Frente Cajón C{i+1}-M{m+1}", cant, hf, w_hueco-4, "Estricto", f"Mela {espesor}")
-                    else:
+                    if "Horizontal" in veta_frentes:
+                        # Veta de izquierda a derecha (ancho del hueco)
                         add_p(f"Frente Cajón C{i+1}-M{m+1}", cant, w_hueco-4, hf, "Estricto", f"Mela {espesor}")
+                    else:
+                        # Veta de arriba a abajo (alto del frente)
+                        add_p(f"Frente Cajón C{i+1}-M{m+1}", cant, hf, w_hueco-4, "Estricto", f"Mela {espesor}")
                     
                     esp = hf - 30; hl = 180 if esp>=190 else (150 if esp>=160 else (100 if esp>=110 else 0))
                     if hl==0: err.append(f"C{i+1} M{m+1}: Frente muy bajo para cajón."); continue
@@ -440,10 +450,10 @@ if procesar:
                 dw = 4 if "Externa" in mnt else 6; dh = 4 if "Externa" in mnt else 6
                 hojas = 2 if dob else 1; wa = (w_hueco - dw - (2 if dob else 0))/hojas if dob else (w_hueco - dw); ha = h_util - dh
 
-                if "Vertical" in veta_frentes:
-                    add_p(f"Puerta {ap[:3]} C{i+1}-M{m+1}", hojas, ha, wa, "Estricto", f"Mela {espesor}", mnt)
-                else:
+                if "Horizontal" in veta_frentes:
                     add_p(f"Puerta {ap[:3]} C{i+1}-M{m+1}", hojas, wa, ha, "Estricto", f"Mela {espesor}", mnt)
+                else:
+                    add_p(f"Puerta {ap[:3]} C{i+1}-M{m+1}", hojas, ha, wa, "Estricto", f"Mela {espesor}", mnt)
                 
                 if "Lateral" in ap:
                     bi = 2 if ha<900 else (3 if ha<1600 else (4 if ha<2100 else 5))
@@ -556,7 +566,7 @@ if procesar:
                             "can_rotate": rotacion_permitida
                         })
             
-            # ORDENAMIENTO ESTRICTO: Primero las piezas más largas (Para que entren enteras antes de que se fragmente la placa)
+            # ORDENAMIENTO: Primero las piezas más largas
             piezas_opt.sort(key=lambda item: max(item["w"], item["h"]), reverse=True)
             
             placas_usadas = []
