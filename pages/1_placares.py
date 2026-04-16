@@ -130,8 +130,11 @@ with col_casco:
         st.divider()
         tiene_placard = st.toggle("🚪 Envolver con Frente Corredizo", value=False)
         hojas_placard = 0
+        descuento_placard = 0
         if tiene_placard:
-            hojas_placard = st.slider("Cantidad de Hojas", 2, 4, 2)
+            c_p1, c_p2 = st.columns(2)
+            hojas_placard = c_p1.slider("Hojas", 2, 4, 2)
+            descuento_placard = c_p2.number_input("Espacio Kit (mm)", 50, 150, 100, step=5, help="Espacio libre para rieles y manijas. Normativa estándar: 100mm")
 
 with col_interno:
     st.header("🗄️ Diseño Interno")
@@ -196,21 +199,21 @@ with col_interno:
 
 # 3. Procesamos y dibujamos en el Contenedor Superior (Visor)
 with visor_container:
-    # Encabezado del visor centrado
     c_v_left, c_v_center, c_v_right = st.columns([1, 3, 1])
     with c_v_center:
         st.header("👁️ Previsualización", anchor=False)
     with c_v_right:
-        st.write("") # Espaciador
+        st.write("") 
         modo_vista = st.radio("Modo", ["📐 Planos 2D (Cotas)", "📦 Render 3D"], horizontal=True, label_visibility="collapsed")
     
     w_int = ancho - (espesor * 2)
     w_hueco = (w_int - ((cant_columnas - 1) * espesor)) / cant_columnas
     x_base = -ancho / 2
     y_base = 0 
-    prof_int = prof - 85 if tiene_placard else prof
     
-    # Renderizamos la figura (centrada con columnas)
+    # ACÁ SE APLICA EL DESCUENTO PARAMÉTRICO DE LOS RIELES A TODO EL INTERIOR
+    prof_int = prof - descuento_placard if tiene_placard else prof
+    
     _, col_plot_center, _ = st.columns([0.5, 4, 0.5])
     
     with col_plot_center:
@@ -369,7 +372,7 @@ with visor_container:
             st.plotly_chart(fig2d, use_container_width=True, config={'displayModeBar': False})
 
 # ==============================================================================
-# 5. CÁLCULO, OPTIMIZACIÓN Y RESULTADOS (Sigue debajo de las columnas)
+# 5. CÁLCULO, OPTIMIZACIÓN Y RESULTADOS
 # ==============================================================================
 st.markdown("---")
 col_b1, col_b2, col_b3 = st.columns([1, 2, 1])
@@ -383,15 +386,14 @@ with col_b2:
 if procesar:
     pz = []; buy = []; err = []
     
-    # REGLA ESTRICTA: El parámetro 'Largo' ES el eje de la veta de la pieza.
-    # El eje X del dibujo de la placa es la dirección de la veta.
     def add_p(nombre, cant, largo_veta, ancho_contra_veta, veta, mat, nota=""):
         c = "-"
         if any(p in nombre for p in ["Frente", "Puerta", "Hoja", "Lat. Externo"]): c = "4L"
         elif any(p in nombre for p in ["Techo", "Piso", "Estante", "Divisor", "Zócalo", "Contra-Frente", "Lat. Cajón"]): c = "1L"
         pz.append({"Pieza": nombre, "Cant": cant, "Largo": largo_veta, "Ancho": ancho_contra_veta, "Veta": veta, "Mat": mat, "Cantos": c, "Nota": nota})
 
-    prof_int = prof - 85 if tiene_placard else prof
+    # ACÁ SE APLICA PARA LA LISTA DE CORTES
+    prof_int = prof - descuento_placard if tiene_placard else prof
     h_int = alto - zocalo - (espesor * 2); w_int = ancho - (espesor * 2)
     
     # EXTERIORES Y ESTRUCTURALES
@@ -432,6 +434,7 @@ if procesar:
                 cant = data.get("cant", 0); 
                 if cant > 0:
                     hf = (h_util - ((cant-1)*3)) / cant
+                    
                     if "Horizontal" in veta_frentes:
                         add_p(f"Frente Cajón C{i+1}-M{m+1}", cant, w_hueco-4, hf, "Estricto", f"Mela {espesor}")
                     else:
