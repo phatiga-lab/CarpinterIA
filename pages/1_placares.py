@@ -6,7 +6,7 @@ import math
 # ==============================================================================
 # CONFIGURACIÓN DE PÁGINA
 # ==============================================================================
-st.set_page_config(page_title="CarpinterIA V25 - CAM Pro 2.1", page_icon="🗄️", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="CarpinterIA V25 - CAM Veta Pro", page_icon="🗄️", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
     <style>
@@ -110,9 +110,6 @@ configuracion_columnas = []
 # ==============================================================================
 col_controles, col_visual = st.columns([1.1, 1.9], gap="large")
 
-# ------------------------------------------------------------------------------
-# ZONA IZQUIERDA: CONTROLES Y DISEÑO 
-# ------------------------------------------------------------------------------
 with col_controles:
     st.header("📐 Configuración")
     
@@ -188,9 +185,6 @@ with col_controles:
             
             configuracion_columnas.append(modulos_columna)
 
-# ------------------------------------------------------------------------------
-# ZONA DERECHA: VISUALIZADOR 2D / 3D
-# ------------------------------------------------------------------------------
 with col_visual:
     c_v1, c_v2 = st.columns([1, 1])
     with c_v1:
@@ -313,7 +307,6 @@ with col_visual:
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         
     else:
-        # MOTOR 2D
         fig2d = go.Figure()
         fig2d.add_annotation(x=ancho/2, y=alto+150, text=f"<b>{int(ancho)} mm</b>", showarrow=False, font=dict(size=14, color="black"))
         fig2d.add_shape(type="line", x0=0, y0=alto+100, x1=ancho, y1=alto+100, line=dict(color="black", width=1))
@@ -367,14 +360,14 @@ col_b1, col_b2, col_b3 = st.columns([1, 2, 1])
 with col_b2:
     procesar = st.button("✂️ OPTIMIZAR CORTE Y PRESUPUESTO", type="primary", use_container_width=True)
     
-    # --- NUEVOS CHECKBOX DE OPTIMIZACION ---
     c_op1, c_op2 = st.columns(2)
     placa_lisa = c_op1.checkbox("🪵 Placa Lisa (Rota TODO libremente)", value=False)
-    forzar_opt = c_op2.checkbox("⚠️ Forzar Optimización (Sacrifica veta del Zócalo Frontal)", value=False)
+    forzar_opt = c_op2.checkbox("⚠️ Forzar Optimización (Sacrifica veta en zócalos y estantes)", value=False)
 
 if procesar:
     pz = []; buy = []; err = []
     
+    # REGLA ESTRICTA: El parámetro 'Largo' ES el eje de la veta de la pieza.
     def add_p(nombre, cant, largo, ancho, veta, mat, nota=""):
         c = "-"
         if any(p in nombre for p in ["Frente", "Puerta", "Hoja", "Lat. Externo"]): c = "4L"
@@ -384,53 +377,59 @@ if procesar:
     prof_int = prof - 85 if tiene_placard else prof
     h_int = alto - zocalo - (espesor * 2); w_int = ancho - (espesor * 2)
     
-    # EXTERIORES
-    add_p("Lat. Externo", 2, alto, prof, "Vertical", f"Mela {espesor}") 
+    # EXTERIORES Y ESTRUCTURALES
+    add_p("Lat. Externo", 2, alto, prof, "Estricto", f"Mela {espesor}") 
+    add_p("Techo/Piso", 2, w_int, prof, "Estricto", f"Mela {espesor}")
+    
     if zocalo > 0:
-        veta_z_front = "Libre" if forzar_opt else "Horizontal"
-        add_p("Zócalo Frontal", 1, w_int, zocalo, veta_z_front, f"Mela {espesor}", "Base")
-        # El trasero SIEMPRE es libre porque no se ve
-        add_p("Zócalo Trasero", 1, w_int, zocalo, "Libre", f"Mela {espesor}", "Base") 
+        veta_zf = "Libre" if forzar_opt else "Estricto"
+        add_p("Zócalo Frontal", 1, w_int, zocalo, veta_zf, f"Mela {espesor}", "Base")
+        # El trasero siempre libre porque no se ve
+        add_p("Zócalo Trasero", 1, w_int, zocalo, "Libre", f"Mela {espesor}", "Base")
 
-    # INTERIORES (Veta Libre)
-    add_p("Techo/Piso", 2, max(w_int, prof), min(w_int, prof), "Libre", f"Mela {espesor}")
     pz.append({"Pieza": "Fondo", "Cant": 1, "Largo": alto-15, "Ancho": ancho-15, "Veta": "Libre", "Mat": f"Fibro {fondo_esp}", "Cantos": "-", "Nota": ""})
     
-    if cant_columnas > 1: add_p("Divisor Vert", cant_columnas-1, max(h_int, prof_int), min(h_int, prof_int), "Libre", f"Mela {espesor}")
+    if cant_columnas > 1: 
+        add_p("Divisor Vert", cant_columnas-1, h_int, prof_int, "Estricto", f"Mela {espesor}")
+        
     w_hueco = (w_int - ((cant_columnas - 1) * espesor)) / cant_columnas
     
     if tiene_placard:
         h_hoja = alto - zocalo - 40
         w_hoja = (w_int + ((hojas_placard - 1) * 30)) / hojas_placard
         if "Vertical" in veta_frentes:
-            add_p("Hoja Corrediza", hojas_placard, h_hoja, w_hoja, "Vertical", f"Mela {espesor}", "Kit Placard")
+            add_p("Hoja Corrediza", hojas_placard, h_hoja, w_hoja, "Estricto", f"Mela {espesor}", "Kit Placard")
         else:
-            add_p("Hoja Corrediza", hojas_placard, w_hoja, h_hoja, "Horizontal", f"Mela {espesor}", "Kit Placard")
+            add_p("Hoja Corrediza", hojas_placard, w_hoja, h_hoja, "Estricto", f"Mela {espesor}", "Kit Placard")
         buy.append({"Item": "Kit Corredizo (Rieles)", "Cant": ancho/1000, "Unidad": "ml", "Costo": c_kit})
+
+    veta_estantes = "Libre" if forzar_opt else "Estricto"
 
     for i, modulos in enumerate(configuracion_columnas):
         for m, mod in enumerate(modulos):
             tipo = mod["tipo"]; data = mod["data"]; h_util = mod["h_util"]
             
             if m < len(modulos) - 1:
-                add_p(f"Estante Fijo (C{i+1} M{m+1})", 1, max(w_hueco, prof_int), min(w_hueco, prof_int), "Libre", f"Mela {espesor}", "Estructural")
+                add_p(f"Estante Fijo C{i+1}-M{m+1}", 1, w_hueco, prof_int, veta_estantes, f"Mela {espesor}", "Estructural")
 
             if tipo == "Cajonera":
                 cant = data.get("cant", 0); 
                 if cant > 0:
                     hf = (h_util - ((cant-1)*3)) / cant
+                    
                     if "Vertical" in veta_frentes:
-                        add_p(f"Frente Cajón C{i+1}-M{m+1}", cant, hf, w_hueco-4, "Vertical", f"Mela {espesor}")
+                        add_p(f"Frente Cajón C{i+1}-M{m+1}", cant, hf, w_hueco-4, "Estricto", f"Mela {espesor}")
                     else:
-                        add_p(f"Frente Cajón C{i+1}-M{m+1}", cant, w_hueco-4, hf, "Horizontal", f"Mela {espesor}")
+                        add_p(f"Frente Cajón C{i+1}-M{m+1}", cant, w_hueco-4, hf, "Estricto", f"Mela {espesor}")
                     
                     esp = hf - 30; hl = 180 if esp>=190 else (150 if esp>=160 else (100 if esp>=110 else 0))
                     if hl==0: err.append(f"C{i+1} M{m+1}: Frente muy bajo para cajón."); continue
                     
                     l_guia = min(550, max(250, int((prof_int - 15) // 50) * 50))
                     wc = w_hueco - (descuento_guia * 2) - 36
-                    add_p("Lat. Cajón", cant*2, max(l_guia, hl), min(l_guia, hl), "Libre", "Blanca 18")
-                    add_p("Contra-Frente", cant, max(wc, hl), min(wc, hl), "Libre", "Blanca 18")
+                    # Interiores de cajon van en placa Blanca, son libres de rotar allá.
+                    add_p("Lat. Cajón", cant*2, l_guia, hl, "Libre", "Blanca 18")
+                    add_p("Contra-Frente", cant, wc, hl, "Libre", "Blanca 18")
                     pz.append({"Pieza": "Fondo Cajón", "Cant": cant, "Largo": l_guia, "Ancho": wc, "Veta": "Libre", "Mat": "Fibro 3", "Cantos": "-", "Nota": ""})
                     buy.append({"Item": f"Guías {tipo_corredera} {l_guia}mm", "Cant": cant, "Unidad": "par", "Costo": c_guia})
 
@@ -442,9 +441,9 @@ if procesar:
                 hojas = 2 if dob else 1; wa = (w_hueco - dw - (2 if dob else 0))/hojas if dob else (w_hueco - dw); ha = h_util - dh
 
                 if "Vertical" in veta_frentes:
-                    add_p(f"Puerta {ap[:3]} C{i+1}-M{m+1}", hojas, ha, wa, "Vertical", f"Mela {espesor}", mnt)
+                    add_p(f"Puerta {ap[:3]} C{i+1}-M{m+1}", hojas, ha, wa, "Estricto", f"Mela {espesor}", mnt)
                 else:
-                    add_p(f"Puerta {ap[:3]} C{i+1}-M{m+1}", hojas, wa, ha, "Horizontal", f"Mela {espesor}", mnt)
+                    add_p(f"Puerta {ap[:3]} C{i+1}-M{m+1}", hojas, wa, ha, "Estricto", f"Mela {espesor}", mnt)
                 
                 if "Lateral" in ap:
                     bi = 2 if ha<900 else (3 if ha<1600 else (4 if ha<2100 else 5))
@@ -456,18 +455,18 @@ if procesar:
 
                 if din:
                     pint = prof_int - 20 if "Externa" in mnt else prof_int - 40 
-                    if din["tipo"]=="Estantes": add_p(f"Estante Int. C{i+1}", din["cant"], max(w_hueco-2, pint), min(w_hueco-2, pint), "Libre", f"Mela {espesor}")
+                    if din["tipo"]=="Estantes": add_p(f"Estante Int. C{i+1}", din["cant"], w_hueco-2, pint, veta_estantes, f"Mela {espesor}")
                     elif din["tipo"]=="Cubos":
-                        if din.get("cols", 1)>1: add_p("Div. Vert. Cubo", din["cols"]-1, max(ha-2, pint), min(ha-2, pint), "Libre", f"Mela {espesor}")
-                        if din.get("rows", 1)>1: add_p("Estante Cubo", din["rows"]-1, max(w_hueco-2, pint), min(w_hueco-2, pint), "Libre", f"Mela {espesor}")
+                        if din.get("cols", 1)>1: add_p("Div. Vert. Cubo", din["cols"]-1, ha-2, pint, "Estricto", f"Mela {espesor}")
+                        if din.get("rows", 1)>1: add_p("Estante Cubo", din["rows"]-1, w_hueco-2, pint, veta_estantes, f"Mela {espesor}")
 
             elif tipo == "Estantes":
-                add_p(f"Estante Móvil C{i+1}", data.get("cant", 0), max(w_hueco-2, prof_int-20), min(w_hueco-2, prof_int-20), "Libre", f"Mela {espesor}")
+                add_p(f"Estante Móvil C{i+1}", data.get("cant", 0), w_hueco-2, prof_int-20, veta_estantes, f"Mela {espesor}")
                 
             elif tipo == "Cubos":
                 c = data.get("cols", 1); r = data.get("rows", 1)
-                if c > 1: add_p(f"Div. Vert. Cubo C{i+1}-M{m+1}", c-1, max(h_util-2, prof_int-20), min(h_util-2, prof_int-20), "Libre", f"Mela {espesor}")
-                if r > 1: add_p(f"Estante Cubo C{i+1}-M{m+1}", r-1, max(w_hueco-2, prof_int-20), min(w_hueco-2, prof_int-20), "Libre", f"Mela {espesor}")
+                if c > 1: add_p(f"Div. Vert. Cubo C{i+1}-M{m+1}", c-1, h_util-2, prof_int-20, "Estricto", f"Mela {espesor}")
+                if r > 1: add_p(f"Estante Cubo C{i+1}-M{m+1}", r-1, w_hueco-2, prof_int-20, veta_estantes, f"Mela {espesor}")
                 
             elif tipo == "Barral":
                 buy.append({"Item": "Barral Aluminio", "Cant": 1, "Unidad": "u.", "Costo": 3000})
@@ -482,7 +481,7 @@ if procesar:
             elif p["Cantos"] == "1L": m_canto_mm += p["Largo"] * p["Cant"]
         buy.append({"Item": f"Canto {tipo_canto}", "Cant": math.ceil((m_canto_mm/1000)*1.2), "Unidad": "m", "Costo": precio_canto})
 
-        t1, t2, t3 = st.tabs(["📝 Despiece", "🔩 Insumos", "✂️ Optimización de Placas"])
+        t1, t2, t3 = st.tabs(["📝 Despiece", "🔩 Insumos", "✂️ Optimización de Placas (Pro)"])
         with t1: 
             df = pd.DataFrame(pz)
             st.dataframe(df.style.format({"Largo": "{:.0f}", "Ancho": "{:.0f}"}), use_container_width=True, hide_index=True)
@@ -557,9 +556,8 @@ if procesar:
                             "can_rotate": rotacion_permitida
                         })
             
-            # EL TRUCO ESTÁ ACÁ: Ahora se ordena primando el lado más largo. 
-            # Esto mete las "tiras" (zócalos, barrales, laterales) antes de que la placa se llene de retazos.
-            piezas_opt.sort(key=lambda item: (max(item["w"], item["h"]), min(item["w"], item["h"])), reverse=True)
+            # ORDENAMIENTO ESTRICTO: Primero las piezas más largas (Para que entren enteras antes de que se fragmente la placa)
+            piezas_opt.sort(key=lambda item: max(item["w"], item["h"]), reverse=True)
             
             placas_usadas = []
 
@@ -575,7 +573,7 @@ if procesar:
                     nueva_placa.insertar(p["w"], p["h"], p["nombre"], p["can_rotate"])
                     placas_usadas.append(nueva_placa)
 
-            st.success(f"✔️ Optimizado con Guillotina Inteligente. Se requirieron **{len(placas_usadas)} placas** reales.")
+            st.success(f"✔️ Optimizado. Se requirieron **{len(placas_usadas)} placas** reales.")
             
             for idx, placa in enumerate(placas_usadas):
                 fig_board = go.Figure()
