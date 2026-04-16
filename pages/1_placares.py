@@ -6,7 +6,7 @@ import math
 # ==============================================================================
 # CONFIGURACIÓN DE PÁGINA
 # ==============================================================================
-st.set_page_config(page_title="CarpinterIA V25 - CAM Pro", page_icon="🗄️", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="CarpinterIA V25 - CAM Pro 2.0", page_icon="🗄️", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
     <style>
@@ -391,6 +391,7 @@ st.markdown("---")
 col_b1, col_b2, col_b3 = st.columns([1, 2, 1])
 with col_b2:
     procesar = st.button("✂️ OPTIMIZAR CORTE Y PRESUPUESTO", type="primary", use_container_width=True)
+    permitir_rotacion = st.checkbox("🔄 Permitir rotar piezas (Ignorar veta para máximo aprovechamiento)", value=True)
 
 if procesar:
     pz = []; buy = []; err = []
@@ -489,7 +490,7 @@ if procesar:
             elif p["Cantos"] == "1L": m_canto_mm += p["Largo"] * p["Cant"]
         buy.append({"Item": f"Canto {tipo_canto}", "Cant": math.ceil((m_canto_mm/1000)*1.2), "Unidad": "m", "Costo": precio_canto})
 
-        t1, t2, t3 = st.tabs(["📝 Despiece", "🔩 Insumos", "✂️ Optimización de Placas (Real)"])
+        t1, t2, t3 = st.tabs(["📝 Despiece", "🔩 Insumos", "✂️ Optimización de Placas (Pro)"])
         with t1: 
             df = pd.DataFrame(pz)
             st.dataframe(df.style.format({"Largo": "{:.0f}", "Ancho": "{:.0f}"}), use_container_width=True, hide_index=True)
@@ -497,77 +498,108 @@ if procesar:
         with t2: 
             st.dataframe(pd.DataFrame(buy).groupby(["Item","Unidad"], as_index=False).sum(), use_container_width=True, hide_index=True)
         with t3: 
-            # --- MOTOR DE NESTING EXACTO ---
+            
+            # --- MOTOR DE NESTING: GUILLOTINE SPLIT ---
+            class PlacaOptimizada:
+                def __init__(self, w, h):
+                    self.w = w
+                    self.h = h
+                    self.free_rects = [{"x": 0, "y": 0, "w": w, "h": h}]
+                    self.piezas = []
+
+                def insertar(self, pw, ph, nombre, allow_rot):
+                    best_score = float('inf')
+                    best_rect_idx = -1
+                    best_node = None
+                    is_rot = False
+
+                    # Busca el hueco perfecto (Best Short Side Fit)
+                    for i, rect in enumerate(self.free_rects):
+                        # Prueba sin rotar
+                        if pw <= rect["w"] and ph <= rect["h"]:
+                            score = min(rect["w"] - pw, rect["h"] - ph)
+                            if score < best_score:
+                                best_score = score; best_rect_idx = i
+                                best_node = {"x": rect["x"], "y": rect["y"], "w": pw, "h": ph}
+                                is_rot = False
+                        # Prueba rotado
+                        if allow_rot and ph <= rect["w"] and pw <= rect["h"]:
+                            score = min(rect["w"] - ph, rect["h"] - pw)
+                            if score < best_score:
+                                best_score = score; best_rect_idx = i
+                                best_node = {"x": rect["x"], "y": rect["y"], "w": ph, "h": pw}
+                                is_rot = True
+
+                    if best_node:
+                        rect = self.free_rects.pop(best_rect_idx)
+                        
+                        # ALGORITMO GUILLOTINA: Divide el espacio sobrante en dos buscando dejar la mayor área limpia posible
+                        w_r1, h_r1 = rect["w"] - best_node["w"], best_node["h"]
+                        w_t1, h_t1 = rect["w"], rect["h"] - best_node["h"]
+                        w_r2, h_r2 = rect["w"] - best_node["w"], rect["h"]
+                        w_t2, h_t2 = best_node["w"], rect["h"] - best_node["h"]
+
+                        if max(w_r1*h_r1, w_t1*h_t1) > max(w_r2*h_r2, w_t2*h_t2):
+                            if w_r1 > 0 and h_r1 > 0: self.free_rects.append({"x": rect["x"] + best_node["w"], "y": rect["y"], "w": w_r1, "h": h_r1})
+                            if w_t1 > 0 and h_t1 > 0: self.free_rects.append({"x": rect["x"], "y": rect["y"] + best_node["h"], "w": w_t1, "h": h_t1})
+                        else:
+                            if w_r2 > 0 and h_r2 > 0: self.free_rects.append({"x": rect["x"] + best_node["w"], "y": rect["y"], "w": w_r2, "h": h_r2})
+                            if w_t2 > 0 and h_t2 > 0: self.free_rects.append({"x": rect["x"], "y": rect["y"] + best_node["h"], "w": w_t2, "h": h_t2})
+
+                        self.piezas.append({"nombre": nombre, "x": best_node["x"], "y": best_node["y"], "w": best_node["w"], "h": best_node["h"], "rotada": is_rot})
+                        return True
+                    return False
+
             esp_sierra = 4
             refile_perimetral = 15
             l_util = placa_largo - (refile_perimetral * 2)
             a_util = placa_ancho - (refile_perimetral * 2)
             
             st.markdown(f"**Geometría de Optimización:**")
-            st.caption(f"📏 Placa Bruta: {placa_largo}x{placa_ancho}mm | 📐 Área Útil (descontando 15mm refile): {l_util}x{a_util}mm | ⚙️ Sierra: {esp_sierra}mm")
+            st.caption(f"📏 Placa Bruta: {placa_largo}x{placa_ancho}mm | 📐 Área Útil: {l_util}x{a_util}mm | ⚙️ Sierra: {esp_sierra}mm")
             
             piezas_opt = []
             for p in pz:
                 if "Mela" in p["Mat"]:
                     for _ in range(p["Cant"]):
-                        # Respetar la veta para la gráfica (no rotar arbitrariamente)
-                        # Sumamos a cada pieza el espesor de la sierra para que el algoritmo reserve ese espacio
-                        dim_w = p["Largo"] + esp_sierra
-                        dim_h = p["Ancho"] + esp_sierra
-                        piezas_opt.append({"nombre": p["Pieza"], "w": dim_w, "h": dim_h, "w_real": p["Largo"], "h_real": p["Ancho"]})
+                        piezas_opt.append({"nombre": p["Pieza"], "w": p["Largo"] + esp_sierra, "h": p["Ancho"] + esp_sierra})
             
-            # Ordenar por el lado más largo primero (para encajar mejor horizontalmente)
-            piezas_opt.sort(key=lambda item: item["w"], reverse=True)
+            # Ordenar por área para mejor encastre
+            piezas_opt.sort(key=lambda item: item["w"] * item["h"], reverse=True)
             
             placas_usadas = []
-            current_placa = []
-            current_x, current_y, shelf_h = 0, 0, 0
-            
-            for p in piezas_opt:
-                # El algoritmo ubica las piezas (sumadas con sus 4mm de sierra) dentro del área útil de la placa
-                if current_x + p["w"] > l_util:
-                    current_x = 0
-                    current_y += shelf_h
-                    shelf_h = 0
-                
-                if current_y + p["h"] > a_util:
-                    placas_usadas.append(current_placa)
-                    current_placa = []
-                    current_x, current_y, shelf_h = 0, 0, 0
-                    
-                if p["h"] > shelf_h:
-                    shelf_h = p["h"]
-                    
-                current_placa.append({
-                    "nombre": p["nombre"], 
-                    "x": current_x, "y": current_y, 
-                    # Ancho y alto gráfico (sin la sierra para que en el dibujo se vea la luz de corte)
-                    "w_vis": p["w_real"], "h_vis": p["h_real"] 
-                })
-                current_x += p["w"]
-                
-            if current_placa: placas_usadas.append(current_placa)
 
-            st.success(f"✔️ Se requieren **{len(placas_usadas)} placas** reales.")
-            st.info("*Nota técnica: Este es un algoritmo 'Shelf Bin Packing' que respeta las vetas originales. Un software CAM de CNC con rotación de piezas y algoritmo de guillotina podría comprimir los resultados un poco más.*")
+            for p in piezas_opt:
+                insertado = False
+                for placa in placas_usadas:
+                    if placa.insertar(p["w"], p["h"], p["nombre"], permitir_rotacion):
+                        insertado = True
+                        break
+                
+                if not insertado:
+                    nueva_placa = PlacaOptimizada(l_util, a_util)
+                    nueva_placa.insertar(p["w"], p["h"], p["nombre"], permitir_rotacion)
+                    placas_usadas.append(nueva_placa)
+
+            st.success(f"✔️ Algoritmo Guillotina finalizado. Se requieren **{len(placas_usadas)} placas** reales.")
             
             for idx, placa in enumerate(placas_usadas):
                 fig_board = go.Figure()
-                
-                # Fondo gris (Placa útil sin refile)
                 fig_board.add_shape(type="rect", x0=0, y0=0, x1=l_util, y1=a_util, line=dict(color="#34495E", width=3), fillcolor="#EAECEE")
                 
-                # Piezas
-                for pieza in placa:
+                for pieza in placa.piezas:
                     px0, py0 = pieza["x"], pieza["y"]
-                    px1, py1 = px0 + pieza["w_vis"], py0 + pieza["h_vis"]
-                    fig_board.add_shape(type="rect", x0=px0, y0=py0, x1=px1, y1=py1, line=dict(color="#17202A", width=1.5), fillcolor="#F5B041")
-                    # Nombre acortado para que entre bien
+                    px1, py1 = px0 + pieza["w"] - esp_sierra, py0 + pieza["h"] - esp_sierra # Restamos sierra para ver la luz gráfica
+                    color_p = "#E67E22" if pieza["rotada"] else "#F5B041"
+                    
+                    fig_board.add_shape(type="rect", x0=px0, y0=py0, x1=px1, y1=py1, line=dict(color="#17202A", width=1.5), fillcolor=color_p)
+                    
                     txt = pieza["nombre"].split(" ")[0] + " " + pieza["nombre"].split(" ")[1] if " " in pieza["nombre"] else pieza["nombre"]
-                    fig_board.add_annotation(x=px0+(pieza["w_vis"]/2), y=py0+(pieza["h_vis"]/2), text=txt, showarrow=False, font=dict(size=10, color="black"))
+                    if pieza["rotada"]: txt += " 🔄"
+                    fig_board.add_annotation(x=px0+((px1-px0)/2), y=py0+((py1-py0)/2), text=txt, showarrow=False, font=dict(size=10, color="black"))
                 
                 fig_board.update_layout(
-                    title=dict(text=f"📐 Patrón de Corte - Placa #{idx+1}", font=dict(size=14)),
+                    title=dict(text=f"📐 Patrón de Corte - Placa #{idx+1} (Guillotina Max-Area)", font=dict(size=14)),
                     xaxis=dict(range=[-50, l_util+50], visible=False), 
                     yaxis=dict(range=[-50, a_util+50], visible=False, scaleanchor="x", scaleratio=1), 
                     margin=dict(t=40, b=10, l=10, r=10), height=400, plot_bgcolor="white"
